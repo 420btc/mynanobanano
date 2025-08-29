@@ -1147,6 +1147,7 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
                 </button>
             </div>
         </div>
+        <Analytics />
     </div>
   );
 };
