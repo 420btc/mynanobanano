@@ -1229,23 +1229,27 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
   const handleDownloadAsset = (image: ProcessedImage | null) => {
     if (!image || !image.processedImage) return;
     
-    // Create a canvas to draw the processed image
+    // Create a canvas to draw the processed image at higher resolution
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
     const img = image.processedImage;
-    canvas.width = img.width;
-    canvas.height = img.height;
+    const downloadScale = 3; // Make downloads 3x larger
+    canvas.width = img.width * downloadScale;
+    canvas.height = img.height * downloadScale;
+    
+    // Use high-quality scaling
+    ctx.imageSmoothingEnabled = false; // Keep pixel art crisp
     
     // Draw the image (it's already transparent)
     if (image.flippedHorizontally) {
       ctx.save();
-      ctx.scale(-1, 1);
-      ctx.drawImage(img, -canvas.width, 0);
+      ctx.scale(-downloadScale, downloadScale);
+      ctx.drawImage(img, -img.width, 0);
       ctx.restore();
     } else {
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, canvas.width, canvas.height);
     }
     
     // Create download link
