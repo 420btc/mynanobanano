@@ -56,6 +56,10 @@ const GAME_MODES = {
 
 const IMAGE_WIDTH = 375; // Increased from 250
 
+// Scale options
+const SCALE_OPTIONS = [1, 1.2, 1.5, 2] as const;
+type ScaleValue = typeof SCALE_OPTIONS[number];
+
 // Adjust this value to control how aggressively the background is removed.
 // Higher values are more aggressive. Good for chroma key.
 const COLOR_DISTANCE_THRESHOLD = 20;
@@ -86,6 +90,8 @@ interface ProcessedImage {
   createdAt?: Date; // When generation started
   completedAt?: Date; // When generation finished
   generationDuration?: number; // Duration in milliseconds
+  // Scaling
+  scale?: number; // Scale factor (1, 1.2, 1.5, 2)
 }
 
 interface ImageProcessingResult {
@@ -369,14 +375,20 @@ const App: React.FC = () => {
           : img.processedImage;
 
       if (imageToDraw && !img.isGenerating) {
+        const scale = img.scale || 1;
+        const scaledWidth = img.width * scale;
+        const scaledHeight = img.height * scale;
+        
+        ctx.save();
+        
         if (img.flippedHorizontally) {
-            ctx.save();
             ctx.scale(-1, 1);
-            ctx.drawImage(imageToDraw, -drawX - img.width, drawY, img.width, img.height);
-            ctx.restore();
+            ctx.drawImage(imageToDraw, -drawX - scaledWidth, drawY, scaledWidth, scaledHeight);
         } else {
-            ctx.drawImage(imageToDraw, drawX, drawY, img.width, img.height);
+            ctx.drawImage(imageToDraw, drawX, drawY, scaledWidth, scaledHeight);
         }
+        
+        ctx.restore();
       }
       
       if (img.isGenerating) {
@@ -572,6 +584,7 @@ const App: React.FC = () => {
           generatingPrompt: undefined,
           completedAt: endTime,
           generationDuration: duration,
+          scale: 1,
         }
       }));
     } catch (e) {
@@ -632,6 +645,7 @@ const App: React.FC = () => {
                 remixSuggestions: suggestions,
                 completedAt: endTime,
                 generationDuration: duration,
+                scale: 1,
             }
         }));
     } catch(e) {
@@ -1103,6 +1117,12 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     }, 'image/png');
   };
 
+  const handleScaleChange = (imageId: number, newScale: ScaleValue) => {
+    setImages(prev => prev.map(img => 
+      img.id === imageId ? { ...img, scale: newScale } : img
+    ));
+  };
+
   // Show login screen if not authenticated
   if (!isAuthenticated) {
     return (
@@ -1383,6 +1403,36 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
                             placeholder="Remix this ..."
                             className="w-full h-10 box-border px-3 py-2 border border-black bg-white text-black text-sm placeholder-neutral-600 focus:outline-none"
                         />
+                    </div>
+                    
+                    {/* Scale Slider */}
+                    <div className="w-80 mt-2 p-3 bg-white border border-black">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-mono text-black">Tamaño: {selectedImage.scale || 1}x</span>
+                        </div>
+                        <div className="relative">
+                            <input
+                                type="range"
+                                min="0"
+                                max="3"
+                                step="1"
+                                value={SCALE_OPTIONS.indexOf((selectedImage.scale || 1) as ScaleValue)}
+                                onChange={(e) => {
+                                    const scaleIndex = parseInt(e.target.value);
+                                    const newScale = SCALE_OPTIONS[scaleIndex];
+                                    handleScaleChange(selectedImage.id, newScale);
+                                }}
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                                style={{
+                                    background: `linear-gradient(to right, #000 0%, #000 ${(SCALE_OPTIONS.indexOf((selectedImage.scale || 1) as ScaleValue) / 3) * 100}%, #e5e5e5 ${(SCALE_OPTIONS.indexOf((selectedImage.scale || 1) as ScaleValue) / 3) * 100}%, #e5e5e5 100%)`
+                                }}
+                            />
+                            <div className="flex justify-between text-xs font-mono text-gray-600 mt-1">
+                                {SCALE_OPTIONS.map(scale => (
+                                    <span key={scale}>{scale}x</span>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                     {selectedImage.remixSuggestions && selectedImage.remixSuggestions.length > 0 && (
                         <button

@@ -14,6 +14,38 @@
         font-family: 'Space Mono', monospace;
         overflow: hidden; /* Prevent scrollbars */
       }
+      
+      /* Custom slider styles */
+      .slider {
+        -webkit-appearance: none;
+        appearance: none;
+        height: 8px;
+        border-radius: 4px;
+        outline: none;
+        border: 1px solid #000;
+      }
+      
+      .slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #000;
+        border: 2px solid #fff;
+        cursor: pointer;
+        box-shadow: 0 0 0 1px #000;
+      }
+      
+      .slider::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #000;
+        border: 2px solid #fff;
+        cursor: pointer;
+        box-shadow: 0 0 0 1px #000;
+      }
     </style>
 <script type="importmap">
 {
