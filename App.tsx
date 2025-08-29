@@ -31,6 +31,28 @@ const TEXT_PROMPT_TEMPLATE = (input: string) => PROMPT_MAIN(input) + PROMPT_POST
 const REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as 3d pixel art in isometric perspective, 8-bit sprite on white background. No drop shadow.`;
 const REMIX_SUGGESTION_PROMPT = `Here is some 3d pixel art. Come up with 5 brief prompts for ways to remix the key entity/object. e.g. "Make it [x]" or "Add a [x]" or some other alteration of the key entity/object. Do NOT suggest ways to alter the environment or background, that must stay a plain solid empty background. Only give alterations of the key entity/object itself. Prompts should be under 8 words.`;
 
+// Building mode prompts
+const BUILDING_PREFIX_IMAGE = "Convert this building/structure into an isometric 2D representation. ";
+const BUILDING_POSTFIX = "in isometric perspective, architectural style, clean 2D building sprite on white background. No drop shadow, no people, no vehicles.";
+const BUILDING_MAIN = (subject: string) => `Create an isometric 2D building of ${subject} `;
+const BUILDING_IMAGE_PROMPT = BUILDING_PREFIX_IMAGE + BUILDING_MAIN("this building/structure") + BUILDING_POSTFIX;
+const BUILDING_TEXT_PROMPT_TEMPLATE = (input: string) => BUILDING_MAIN(input) + BUILDING_POSTFIX;
+const BUILDING_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as an isometric 2D building on white background. No drop shadow, architectural style.`;
+
+// Game modes
+type GameMode = 'pixel' | 'building';
+const GAME_MODES = {
+  pixel: {
+    name: 'Pixel Art',
+    description: '3D pixel art sprites',
+    icon: '🎮'
+  },
+  building: {
+    name: 'Constructor',
+    description: 'Edificios isométricos 2D',
+    icon: '🏗️'
+  }
+} as const;
 
 const IMAGE_WIDTH = 375; // Increased from 250
 
@@ -199,6 +221,8 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState(false);
+  const [gameMode, setGameMode] = useState<GameMode>('pixel');
+  const [showModeSelector, setShowModeSelector] = useState(false);
   const [images, setImages] = useState<ProcessedImage[]>([]);
   const [textInput, setTextInput] = useState('');
   const [remixInput, setRemixInput] = useState('');
@@ -294,6 +318,22 @@ const App: React.FC = () => {
 
     prevImagesRef.current = images;
   }, [images]);
+
+  // Effect for closing mode selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      // Don't close if clicking inside the mode selector
+      if (showModeSelector && !target.closest('.mode-selector')) {
+        setShowModeSelector(false);
+      }
+    };
+    
+    if (showModeSelector) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showModeSelector]);
 
   const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -475,20 +515,23 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', resizeCanvas);
   }, [drawCanvas]);
 
-  const generateFromImage = useCallback(async (file: File, id: number, prompt: string = IMAGE_PROMPT) => {
+  const generateFromImage = useCallback(async (file: File, id: number, prompt?: string) => {
+    // Use mode-specific prompt if none provided
+    const defaultPrompt = gameMode === 'building' ? BUILDING_IMAGE_PROMPT : IMAGE_PROMPT;
+    const finalPrompt = prompt || defaultPrompt;
     const startTime = new Date();
     
     // Update the image with start time and prompt
     setImages(prev => prev.map(img => 
       img.id === id ? { 
         ...img, 
-        originalPrompt: prompt,
+        originalPrompt: finalPrompt,
         createdAt: startTime 
       } : img
     ));
     
     try {
-      const { imageUrl } = await generateImageWithPrompt(file, prompt);
+      const { imageUrl } = await generateImageWithPrompt(file, finalPrompt);
       if (!imageUrl) throw new Error("Generation failed, no image returned.");
 
       const originalImg = new Image();
@@ -535,11 +578,11 @@ const App: React.FC = () => {
       console.error(e);
       setImages(prev => prev.filter(img => img.id !== id));
     }
-  }, []);
+  }, [gameMode]);
 
   const generateFromText = useCallback(async (userInput: string, id: number) => {
     const startTime = new Date();
-    const fullPrompt = TEXT_PROMPT_TEMPLATE(userInput);
+    const fullPrompt = gameMode === 'building' ? BUILDING_TEXT_PROMPT_TEMPLATE(userInput) : TEXT_PROMPT_TEMPLATE(userInput);
     
     // Update the image with start time and prompt
     setImages(prev => prev.map(img => 
@@ -595,7 +638,7 @@ const App: React.FC = () => {
         console.error(e);
         setImages(prev => prev.filter(img => img.id !== id));
     }
-  }, []);
+  }, [gameMode]);
   
   const addImageToCanvas = useCallback(async (file: File, customPosition?: { x: number; y: number }) => {
     await ensureAudioContext();
@@ -1132,6 +1175,38 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         />
         <div className="absolute top-4 left-4 flex items-center gap-2 pointer-events-none">
             <p className="text-lg text-black">BANANA WORLD v0.1</p>
+            <div className="relative pointer-events-auto mode-selector">
+                <button 
+                    onClick={() => setShowModeSelector(!showModeSelector)}
+                    className="flex items-center gap-2 px-3 py-1 border border-black bg-white/90 text-black text-sm font-mono hover:bg-gray-100 transition-colors"
+                >
+                    <span>{GAME_MODES[gameMode].icon}</span>
+                    <span>{GAME_MODES[gameMode].name}</span>
+                    <span className="text-xs">▼</span>
+                </button>
+                {showModeSelector && (
+                    <div className="absolute top-full left-0 mt-1 bg-white border border-black shadow-lg z-50 min-w-full">
+                        {Object.entries(GAME_MODES).map(([mode, config]) => (
+                            <button
+                                key={mode}
+                                onClick={() => {
+                                    setGameMode(mode as GameMode);
+                                    setShowModeSelector(false);
+                                }}
+                                className={`w-full px-3 py-2 text-left text-sm font-mono hover:bg-gray-100 transition-colors flex items-center gap-2 ${
+                                    gameMode === mode ? 'bg-gray-100' : ''
+                                }`}
+                            >
+                                <span>{config.icon}</span>
+                                <div>
+                                    <div className="font-bold">{config.name}</div>
+                                    <div className="text-xs text-gray-600">{config.description}</div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
             <button 
                 onClick={() => setShowHelpModal(true)}
                 className="pointer-events-auto w-6 h-6 flex items-center justify-center border border-black rounded-full text-black bg-white/80"
@@ -1339,7 +1414,7 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
                                 handleTextSubmit(e);
                             }
                         }}
-                        placeholder="Create anything ..."
+                        placeholder={gameMode === 'building' ? 'Crear edificio (ej: casa, torre, castillo)...' : 'Create anything ...'}
                         className="w-full h-12 box-border pl-4 pr-12 py-3 border border-black bg-white/80 text-black text-sm placeholder-neutral-600 focus:outline-none"
                         aria-label="Prompt input"
                     />
