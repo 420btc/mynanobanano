@@ -491,9 +491,12 @@ const App: React.FC = () => {
       
       const isHovered = hoveredImageId === img.id && !img.isGenerating && img.processedImage;
       if (selectedImageId === img.id || isHovered) {
-        const centerX = Math.round(img.x + img.width / 2);
-        const centerY = Math.round(img.y + img.height / 2);
-        const radius = Math.min(img.width, img.height) / 2 * 0.8; // Reduced from 1.1
+        const scale = img.scale || 1;
+        const scaledWidth = img.width * scale;
+        const scaledHeight = img.height * scale;
+        const centerX = Math.round(img.x + scaledWidth / 2);
+        const centerY = Math.round(img.y + scaledHeight / 2);
+        const radius = Math.min(scaledWidth, scaledHeight) / 2 * 0.8;
         
         ctx.lineWidth = 1;
         if (selectedImageId === img.id) {
@@ -739,7 +742,11 @@ const App: React.FC = () => {
   const getImageAtPosition = (x: number, y: number): ProcessedImage | null => {
     for (let i = images.length - 1; i >= 0; i--) {
       const img = images[i];
-      if (x >= img.x && x <= img.x + img.width && y >= img.y && y <= img.y + img.height) {
+      const scale = img.scale || 1;
+      const scaledWidth = img.width * scale;
+      const scaledHeight = img.height * scale;
+      
+      if (x >= img.x && x <= img.x + scaledWidth && y >= img.y && y <= img.y + scaledHeight) {
         // If the image is generating, the whole bounding box is clickable.
         if (img.isGenerating) {
             return img;
@@ -750,8 +757,8 @@ const App: React.FC = () => {
             const localX = x - img.x;
             const localY = y - img.y;
             
-            const scaleX = img.width / img.processedImage.width;
-            const scaleY = img.height / img.processedImage.height;
+            const scaleX = scaledWidth / img.processedImage.width;
+            const scaleY = scaledHeight / img.processedImage.height;
             
             const scaledBounds = {
                 x: img.contentBounds.x * scaleX,
@@ -1330,8 +1337,8 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
             <div
                 className="absolute flex flex-col items-center gap-2"
                 style={{
-                    top: `${selectedImage.y + selectedImage.height / 2 + (Math.min(selectedImage.width, selectedImage.height) / 2 * 0.8) + 15}px`,
-                    left: `${selectedImage.x + selectedImage.width / 2}px`,
+                    top: `${selectedImage.y + (selectedImage.height * (selectedImage.scale || 1)) / 2 + (Math.min(selectedImage.width * (selectedImage.scale || 1), selectedImage.height * (selectedImage.scale || 1)) / 2 * 0.8) + 15}px`,
+                    left: `${selectedImage.x + (selectedImage.width * (selectedImage.scale || 1)) / 2}px`,
                     transform: 'translateX(-50%)',
                     zIndex: 10,
                 }}
