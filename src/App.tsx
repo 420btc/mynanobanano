@@ -196,6 +196,9 @@ const imageElementToFile = async (imageElement: HTMLImageElement, fileName: stri
 
 
 const App: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
   const [images, setImages] = useState<ProcessedImage[]>([]);
   const [textInput, setTextInput] = useState('');
   const [remixInput, setRemixInput] = useState('');
@@ -948,6 +951,62 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
       link.click();
     }
   };
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === 'free420') {
+      setIsAuthenticated(true);
+      setPasswordError(false);
+    } else {
+      setPasswordError(true);
+      setPasswordInput('');
+    }
+  };
+
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="w-screen h-screen bg-gradient-to-br from-yellow-100 to-orange-200 flex items-center justify-center">
+        <div className="bg-white p-8 border-2 border-black shadow-2xl max-w-md w-full mx-4">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-black mb-2">🍌 BANANA WORLD</h1>
+            <p className="text-gray-600 font-mono text-sm">Acceso Restringido</p>
+          </div>
+          
+          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="password" className="block text-sm font-bold text-gray-700 mb-2">
+                Contraseña:
+              </label>
+              <input
+                type="password"
+                id="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className={`w-full px-4 py-3 border-2 ${passwordError ? 'border-red-500' : 'border-black'} bg-white text-black font-mono focus:outline-none focus:border-yellow-500 transition-colors`}
+                placeholder="Ingresa la contraseña"
+                autoFocus
+              />
+              {passwordError && (
+                <p className="text-red-500 text-sm mt-2 font-mono">❌ Contraseña incorrecta</p>
+              )}
+            </div>
+            
+            <button
+              type="submit"
+              className="w-full bg-black text-white py-3 px-4 font-mono text-sm hover:bg-gray-800 transition-colors border-2 border-black"
+            >
+              ENTRAR
+            </button>
+          </form>
+          
+          <div className="text-center mt-6 text-xs text-gray-500 font-mono">
+            v0.1 - Powered by Gemini 2.5 Flash
+          </div>
+        </div>
+      </div>
+    );
+  }
 
 
   return (
