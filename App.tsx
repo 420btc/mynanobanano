@@ -1068,7 +1068,8 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordInput === 'free420') {
+    const correctPassword = import.meta.env.VITE_APP_PASSWORD || 'free420';
+    if (passwordInput === correctPassword) {
       setIsAuthenticated(true);
       setPasswordError(false);
     } else {
