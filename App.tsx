@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import * as Tone from 'tone';
 import { Analytics } from '@vercel/analytics/react';
-import { generateImageWithPrompt, generateImageFromText, getRemixSuggestions } from './services/geminiService';
+import { generateImageWithPrompt, generateImageWithMultiplePrompts, generateImageFromText, getRemixSuggestions } from './services/geminiService';
 
 // --- SOUND DEFINITIONS ---
 const synth = new Tone.Synth({
@@ -229,6 +229,8 @@ const App: React.FC = () => {
   const [passwordError, setPasswordError] = useState(false);
   const [gameMode, setGameMode] = useState<GameMode>('pixel');
   const [showModeSelector, setShowModeSelector] = useState(false);
+  const [pendingImages, setPendingImages] = useState<File[]>([]);
+  const [showPendingArea, setShowPendingArea] = useState(false);
   const [images, setImages] = useState<ProcessedImage[]>([]);
   const [textInput, setTextInput] = useState('');
   const [remixInput, setRemixInput] = useState('');
@@ -304,9 +306,9 @@ const App: React.FC = () => {
 
     prevUrls.forEach(url => {
       // only revoke blob URLs, not data URLs
-      if (url && url.startsWith('blob:') && !currentUrls.has(url)) {
-        URL.revokeObjectURL(url);
-        const entry = Object.entries(previewImageCache.current).find(([, img]) => img.src === url);
+      if (url && (url as string).startsWith('blob:') && !currentUrls.has(url)) {
+        URL.revokeObjectURL(url as string);
+        const entry = Object.entries(previewImageCache.current).find(([, img]) => (img as HTMLImageElement).src === url);
         if (entry) {
           delete previewImageCache.current[parseInt(entry[0], 10)];
         }
@@ -694,24 +696,164 @@ const App: React.FC = () => {
 
   const handleDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.type.startsWith('image/')) {
-        const rect = canvasRef.current?.getBoundingClientRect();
-        const dropX = e.clientX - (rect?.left ?? 0);
-        const dropY = e.clientY - (rect?.top ?? 0);
-        addImageToCanvas(file, { x: dropX, y: dropY });
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      const imageFiles = files.filter((file: File) => file.type.startsWith('image/'));
+      
+      if (imageFiles.length > 0) {
+        // Add dropped images to pending list
+        setPendingImages(prev => [...prev, ...imageFiles]);
+        setShowPendingArea(true);
       }
     }
-  }, [addImageToCanvas]);
+  }, []);
+
+  const generateFromMultipleImages = useCallback(async (files: File[], id: number) => {
+    const startTime = new Date();
+    const defaultPrompt = gameMode === 'building' ? 
+      `Analyze these ${files.length} building/structure images and create a single isometric 2D architectural representation combining their key features. ${BUILDING_POSTFIX}` :
+      `Analyze these ${files.length} images and create a single 3D pixel art sprite combining their key elements. ${PROMPT_POSTFIX}`;
+    
+    // Update the image with start time and prompt
+    setImages(prev => prev.map(img => 
+      img.id === id ? { 
+        ...img, 
+        originalPrompt: defaultPrompt,
+        createdAt: startTime 
+      } : img
+    ));
+    
+    try {
+      // Use all files to generate a combined image
+      const { imageUrl } = await generateImageWithMultiplePrompts(files, defaultPrompt);
+      if (!imageUrl) throw new Error("Generation failed, no image returned.");
+
+      const originalImg = new Image();
+      originalImg.src = imageUrl;
+      originalImageCache.current[id] = originalImg;
+
+      const { transparentImage, contentBounds } = await processImageForTransparency(imageUrl);
+      const suggestions = await getRemixSuggestions(files[0], defaultPrompt);
+      
+      const endTime = new Date();
+      const duration = endTime.getTime() - startTime.getTime();
+
+      setImages(prev => prev.map(img => {
+        if (img.id !== id) return img;
+        
+        const aspectRatio = transparentImage.width / transparentImage.height;
+        const newWidth = IMAGE_WIDTH;
+        const newHeight = IMAGE_WIDTH / aspectRatio;
+        const currentCenterX = img.x + img.width / 2;
+        const currentCenterY = img.y + img.height / 2;
+
+        return {
+          ...img,
+          processedImage: transparentImage,
+          originalImageUrl: imageUrl,
+          showOriginal: false,
+          contentBounds,
+          width: newWidth,
+          height: newHeight,
+          x: currentCenterX - newWidth / 2,
+          y: currentCenterY - newHeight / 2,
+          isGenerating: false,
+          sourcePreviewUrl: undefined,
+          remixSuggestions: suggestions,
+          generatingPrompt: undefined,
+          completedAt: endTime,
+          generationDuration: duration,
+          justGenerated: true,
+          generatedAt: Date.now(),
+        }
+      }));
+    } catch (e) {
+      console.error(e);
+      setImages(prev => prev.filter(img => img.id !== id));
+    }
+  }, [gameMode]);
+
+  const handleMultipleImageUpload = async (files: File[]) => {
+    await ensureAudioContext();
+    synth.triggerAttackRelease('C4', '8n');
+
+    const id = nextId.current++;
+    const canvas = canvasRef.current;
+    const dropX = canvas ? canvas.width / 2 : window.innerWidth / 2;
+    const dropY = canvas ? canvas.height / 2 : window.innerHeight / 2;
+    
+    // Create preview URLs for all images
+    const previewUrls = files.map(file => URL.createObjectURL(file));
+    const previewImages = await Promise.all(
+      previewUrls.map(url => {
+        return new Promise<HTMLImageElement>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.src = url;
+        });
+      })
+    );
+    
+    // Store the first image as preview
+    previewImageCache.current[id] = previewImages[0];
+    
+    const newImage: ProcessedImage = {
+        id,
+        sourceFile: files[0], // Store first file as reference
+        processedImage: null,
+        x: dropX - IMAGE_WIDTH / 2,
+        y: dropY - IMAGE_WIDTH / 2,
+        width: IMAGE_WIDTH,
+        height: IMAGE_WIDTH,
+        isGenerating: true,
+        contentBounds: { x: 0, y: 0, width: IMAGE_WIDTH, height: IMAGE_WIDTH },
+        sourcePreviewUrl: previewUrls[0],
+        generatingPrompt: `Combining ${files.length} images...`,
+        scale: 1,
+    };
+    
+    setImages(prev => [...prev, newImage]);
+    
+    // Generate from multiple images
+    generateFromMultipleImages(files, id);
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-        const file = e.target.files[0];
-        if (file.type.startsWith('image/')) {
-            addImageToCanvas(file);
-        }
+    if (e.target.files && e.target.files.length > 0) {
+        const files = Array.from(e.target.files);
+        const imageFiles = files.filter((file: File) => file.type.startsWith('image/'));
+        
+        // Add new images to pending list
+        setPendingImages(prev => [...prev, ...imageFiles]);
+        setShowPendingArea(true);
+        
         e.target.value = '';
+    }
+  };
+
+  const handleConfirmImages = () => {
+    if (pendingImages.length === 1) {
+        // Single image - use existing behavior
+        addImageToCanvas(pendingImages[0]);
+    } else if (pendingImages.length > 1) {
+        // Multiple images - create combined asset
+        handleMultipleImageUpload(pendingImages);
+    }
+    
+    // Clear pending images
+    setPendingImages([]);
+    setShowPendingArea(false);
+  };
+
+  const handleClearPendingImages = () => {
+    setPendingImages([]);
+    setShowPendingArea(false);
+  };
+
+  const handleRemovePendingImage = (index: number) => {
+    setPendingImages(prev => prev.filter((_, i) => i !== index));
+    if (pendingImages.length <= 1) {
+        setShowPendingArea(false);
     }
   };
 
@@ -721,15 +863,21 @@ const App: React.FC = () => {
       const items = event.clipboardData?.items;
       if (!items) return;
 
+      const imageFiles: File[] = [];
       for (const item of items) {
         if (item.type.startsWith('image/')) {
           const file = item.getAsFile();
           if (file) {
-            addImageToCanvas(file);
-            event.preventDefault();
-            return;
+            imageFiles.push(file);
           }
         }
+      }
+      
+      if (imageFiles.length > 0) {
+        // Add pasted images to pending list
+        setPendingImages(prev => [...prev, ...imageFiles]);
+        setShowPendingArea(true);
+        event.preventDefault();
       }
     };
 
@@ -737,7 +885,7 @@ const App: React.FC = () => {
     return () => {
       document.removeEventListener('paste', handlePaste);
     };
-  }, [addImageToCanvas]);
+  }, []);
 
   const getImageAtPosition = (x: number, y: number): ProcessedImage | null => {
     for (let i = images.length - 1; i >= 0; i--) {
@@ -1068,7 +1216,7 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPassword = import.meta.env.VITE_APP_PASSWORD || 'free420';
+    const correctPassword = (import.meta.env as any).VITE_APP_PASSWORD || 'free420';
     if (passwordInput === correctPassword) {
       setIsAuthenticated(true);
       setPasswordError(false);
@@ -1178,11 +1326,68 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
 
 
   return (
-    <div
-      className="w-screen h-screen bg-white"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={handleDrop}
-    >
+    <>
+      {/* Pending Images Area */}
+      {showPendingArea && pendingImages.length > 0 && (
+        <div className="fixed bottom-4 left-4 bg-white border-2 border-black shadow-lg z-50 max-w-sm">
+          <div className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold font-mono">Imágenes seleccionadas ({pendingImages.length})</h3>
+              <button
+                onClick={handleClearPendingImages}
+                className="text-xs text-gray-500 hover:text-black"
+                aria-label="Clear all"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-2 mb-3 max-h-32 overflow-y-auto">
+              {pendingImages.map((file, index) => {
+                const previewUrl = URL.createObjectURL(file);
+                return (
+                  <div key={index} className="relative group">
+                    <img
+                      src={previewUrl}
+                      alt={`Preview ${index + 1}`}
+                      className="w-16 h-16 object-cover border border-gray-300"
+                      onLoad={() => URL.revokeObjectURL(previewUrl)}
+                    />
+                    <button
+                      onClick={() => handleRemovePendingImage(index)}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                      aria-label="Remove image"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={handleConfirmImages}
+                className="flex-1 bg-black text-white py-2 px-3 text-xs font-mono hover:bg-gray-800 transition-colors"
+              >
+                {pendingImages.length === 1 ? 'Generar' : `Combinar ${pendingImages.length} imágenes`}
+              </button>
+              <button
+                onClick={handleClearPendingImages}
+                className="px-3 py-2 border border-black text-black text-xs font-mono hover:bg-gray-100 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div
+        className="w-screen h-screen bg-white"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
+      >
         <canvas
             ref={canvasRef}
             onMouseDown={handleMouseDown}
@@ -1200,9 +1405,18 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
             onChange={handleFileUpload}
             className="hidden"
             accept="image/*"
+            multiple
         />
         <div className="absolute top-4 left-4 flex items-center gap-2 pointer-events-none">
-            <p className="text-lg text-black">BANANA WORLD v0.1</p>
+            <div className="flex items-center gap-1">
+                <span className="text-lg text-black font-bold">BANANA WORLD v0.2 By</span>
+                <button 
+                    onClick={() => window.open('https://carlosfr.es/projects', '_blank')}
+                    className="text-lg text-red-600 hover:text-red-800 transition-colors cursor-pointer font-bold underline"
+                >
+                    carlosfr.es
+                </button>
+            </div>
             <div className="relative pointer-events-auto mode-selector">
                 <button 
                     onClick={() => setShowModeSelector(!showModeSelector)}
@@ -1489,7 +1703,8 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="h-12 w-12 p-3 box-border border border-black bg-white/80 text-black flex-shrink-0 transition-colors hover:bg-gray-100 flex items-center justify-center"
-                    aria-label="Upload image"
+                    aria-label="Upload image(s)"
+                    title="Upload single or multiple images"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
                 </button>
@@ -1516,7 +1731,8 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
             </div>
         </div>
         <Analytics />
-    </div>
+      </div>
+    </>
   );
 };
 

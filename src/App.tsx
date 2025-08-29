@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import * as Tone from 'tone';
 import { Analytics } from '@vercel/analytics/react';
-import { generateImageWithPrompt, generateImageFromText, getRemixSuggestions } from './services/geminiService';
+import { generateImageWithPrompt, generateImageWithMultiplePrompts, generateImageFromText, getRemixSuggestions } from './services/geminiService';
 
 // --- SOUND DEFINITIONS ---
 const synth = new Tone.Synth({
@@ -31,8 +31,34 @@ const TEXT_PROMPT_TEMPLATE = (input: string) => PROMPT_MAIN(input) + PROMPT_POST
 const REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as 3d pixel art in isometric perspective, 8-bit sprite on white background. No drop shadow.`;
 const REMIX_SUGGESTION_PROMPT = `Here is some 3d pixel art. Come up with 5 brief prompts for ways to remix the key entity/object. e.g. "Make it [x]" or "Add a [x]" or some other alteration of the key entity/object. Do NOT suggest ways to alter the environment or background, that must stay a plain solid empty background. Only give alterations of the key entity/object itself. Prompts should be under 8 words.`;
 
+// Building mode constants
+const BUILDING_PREFIX_IMAGE = "Convert this building/structure into an isometric 2D representation. ";
+const BUILDING_POSTFIX = "in isometric perspective, architectural style, clean 2D building sprite on white background. No drop shadow, no people, no vehicles.";
+const BUILDING_MAIN = (subject: string) => `Create an isometric 2D building of ${subject} `;
+const BUILDING_IMAGE_PROMPT = BUILDING_PREFIX_IMAGE + BUILDING_MAIN("this building/structure") + BUILDING_POSTFIX;
+const BUILDING_TEXT_PROMPT_TEMPLATE = (input: string) => BUILDING_MAIN(input) + BUILDING_POSTFIX;
+const BUILDING_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as an isometric 2D building on white background. No drop shadow, architectural style.`;
+
+// Game mode types
+type GameMode = 'pixel' | 'building';
+const GAME_MODES = {
+  pixel: {
+    name: 'Pixel Art',
+    description: '3D pixel art sprites',
+    icon: '🎮'
+  },
+  building: {
+    name: 'Constructor',
+    description: 'Edificios isométricos 2D',
+    icon: '🏗️'
+  }
+} as const;
 
 const IMAGE_WIDTH = 375; // Increased from 250
+
+// Scale options
+const SCALE_OPTIONS = [1, 1.2, 1.5, 2] as const;
+type ScaleValue = typeof SCALE_OPTIONS[number];
 
 // Adjust this value to control how aggressively the background is removed.
 // Higher values are more aggressive. Good for chroma key.
@@ -64,6 +90,7 @@ interface ProcessedImage {
   createdAt?: Date; // When generation started
   completedAt?: Date; // When generation finished
   generationDuration?: number; // Duration in milliseconds
+  scale?: number; // Scale factor (1, 1.2, 1.5, 2)
 }
 
 interface ImageProcessingResult {
@@ -199,6 +226,9 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState(false);
+  const [gameMode, setGameMode] = useState<GameMode>('pixel');
+  const [pendingImages, setPendingImages] = useState<File[]>([]);
+  const [showPendingArea, setShowPendingArea] = useState(false);
   const [images, setImages] = useState<ProcessedImage[]>([]);
   const [textInput, setTextInput] = useState('');
   const [remixInput, setRemixInput] = useState('');
@@ -273,9 +303,9 @@ const App: React.FC = () => {
 
     prevUrls.forEach(url => {
       // only revoke blob URLs, not data URLs
-      if (url && url.startsWith('blob:') && !currentUrls.has(url)) {
-        URL.revokeObjectURL(url);
-        const entry = Object.entries(previewImageCache.current).find(([, img]) => img.src === url);
+      if (url && (url as string).startsWith('blob:') && !currentUrls.has(url)) {
+        URL.revokeObjectURL(url as string);
+        const entry = Object.entries(previewImageCache.current).find(([, img]) => (img as HTMLImageElement).src === url);
         if (entry) {
           delete previewImageCache.current[parseInt(entry[0], 10)];
         }
@@ -582,23 +612,163 @@ const App: React.FC = () => {
 
   const handleDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.type.startsWith('image/')) {
-        const rect = canvasRef.current?.getBoundingClientRect();
-        const dropX = e.clientX - (rect?.left ?? 0);
-        const dropY = e.clientY - (rect?.top ?? 0);
-        addImageToCanvas(file, { x: dropX, y: dropY });
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      const imageFiles = files.filter((file: File) => file.type.startsWith('image/'));
+      
+      if (imageFiles.length > 0) {
+        // Add dropped images to pending list
+        setPendingImages(prev => [...prev, ...imageFiles]);
+        setShowPendingArea(true);
       }
     }
-  }, [addImageToCanvas]);
+  }, []);
+
+  const generateFromMultipleImages = useCallback(async (files: File[], id: number) => {
+    const startTime = new Date();
+    const defaultPrompt = gameMode === 'building' ? 
+      `Analyze these ${files.length} building/structure images and create a single isometric 2D architectural representation combining their key features. ${BUILDING_POSTFIX}` :
+      `Analyze these ${files.length} images and create a single 3D pixel art sprite combining their key elements. ${PROMPT_POSTFIX}`;
+    
+    // Update the image with start time and prompt
+    setImages(prev => prev.map(img => 
+      img.id === id ? { 
+        ...img, 
+        originalPrompt: defaultPrompt,
+        createdAt: startTime 
+      } : img
+    ));
+    
+    try {
+      // Use all files to generate a combined image
+      const { imageUrl } = await generateImageWithMultiplePrompts(files, defaultPrompt);
+      if (!imageUrl) throw new Error("Generation failed, no image returned.");
+
+      const originalImg = new Image();
+      originalImg.src = imageUrl;
+      originalImageCache.current[id] = originalImg;
+
+      const { transparentImage, contentBounds } = await processImageForTransparency(imageUrl);
+      const suggestions = await getRemixSuggestions(files[0], defaultPrompt);
+      
+      const endTime = new Date();
+      const duration = endTime.getTime() - startTime.getTime();
+
+      setImages(prev => prev.map(img => {
+        if (img.id !== id) return img;
+        
+        const aspectRatio = transparentImage.width / transparentImage.height;
+        const newWidth = IMAGE_WIDTH;
+        const newHeight = IMAGE_WIDTH / aspectRatio;
+        const currentCenterX = img.x + img.width / 2;
+        const currentCenterY = img.y + img.height / 2;
+
+        return {
+          ...img,
+          processedImage: transparentImage,
+          originalImageUrl: imageUrl,
+          showOriginal: false,
+          contentBounds,
+          width: newWidth,
+          height: newHeight,
+          x: currentCenterX - newWidth / 2,
+          y: currentCenterY - newHeight / 2,
+          isGenerating: false,
+          sourcePreviewUrl: undefined,
+          remixSuggestions: suggestions,
+          generatingPrompt: undefined,
+          completedAt: endTime,
+          generationDuration: duration,
+          justGenerated: true,
+          generatedAt: Date.now(),
+        }
+      }));
+    } catch (e) {
+      console.error(e);
+      setImages(prev => prev.filter(img => img.id !== id));
+    }
+  }, [gameMode]);
+
+  const handleMultipleImageUpload = async (files: File[]) => {
+    await ensureAudioContext();
+    synth.triggerAttackRelease('C4', '8n');
+
+    const id = nextId.current++;
+    const canvas = canvasRef.current;
+    const dropX = canvas ? canvas.width / 2 : window.innerWidth / 2;
+    const dropY = canvas ? canvas.height / 2 : window.innerHeight / 2;
+    
+    // Create preview URLs for all images
+    const previewUrls = files.map(file => URL.createObjectURL(file));
+    const previewImages = await Promise.all(
+      previewUrls.map(url => {
+        return new Promise<HTMLImageElement>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.src = url;
+        });
+      })
+    );
+    
+    // Store the first image as preview
+    previewImageCache.current[id] = previewImages[0];
+    
+    const newImage: ProcessedImage = {
+        id,
+        sourceFile: files[0], // Store first file as reference
+        processedImage: null,
+        x: dropX - IMAGE_WIDTH / 2,
+        y: dropY - IMAGE_WIDTH / 2,
+        width: IMAGE_WIDTH,
+        height: IMAGE_WIDTH,
+        isGenerating: true,
+        contentBounds: { x: 0, y: 0, width: IMAGE_WIDTH, height: IMAGE_WIDTH },
+        sourcePreviewUrl: previewUrls[0],
+        generatingPrompt: `Combining ${files.length} images...`,
+        scale: 1,
+    };
+    
+    setImages(prev => [...prev, newImage]);
+    
+    // Generate from multiple images
+    generateFromMultipleImages(files, id);
+  };
+
+  const handleConfirmImages = () => {
+    if (pendingImages.length === 1) {
+        // Single image - use existing behavior
+        addImageToCanvas(pendingImages[0]);
+    } else if (pendingImages.length > 1) {
+        // Multiple images - create combined asset
+        handleMultipleImageUpload(pendingImages);
+    }
+    
+    // Clear pending images
+    setPendingImages([]);
+    setShowPendingArea(false);
+  };
+
+  const handleClearPendingImages = () => {
+    setPendingImages([]);
+    setShowPendingArea(false);
+  };
+
+  const handleRemovePendingImage = (index: number) => {
+    setPendingImages(prev => prev.filter((_, i) => i !== index));
+    if (pendingImages.length <= 1) {
+        setShowPendingArea(false);
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-        const file = e.target.files[0];
-        if (file.type.startsWith('image/')) {
-            addImageToCanvas(file);
-        }
+    if (e.target.files && e.target.files.length > 0) {
+        const files = Array.from(e.target.files);
+        const imageFiles = files.filter((file: File) => file.type.startsWith('image/'));
+        
+        // Add new images to pending list
+        setPendingImages(prev => [...prev, ...imageFiles]);
+        setShowPendingArea(true);
+        
         e.target.value = '';
     }
   };
@@ -609,15 +779,21 @@ const App: React.FC = () => {
       const items = event.clipboardData?.items;
       if (!items) return;
 
+      const imageFiles: File[] = [];
       for (const item of items) {
         if (item.type.startsWith('image/')) {
           const file = item.getAsFile();
           if (file) {
-            addImageToCanvas(file);
-            event.preventDefault();
-            return;
+            imageFiles.push(file);
           }
         }
+      }
+      
+      if (imageFiles.length > 0) {
+        // Add pasted images to pending list
+        setPendingImages(prev => [...prev, ...imageFiles]);
+        setShowPendingArea(true);
+        event.preventDefault();
       }
     };
 
@@ -625,7 +801,7 @@ const App: React.FC = () => {
     return () => {
       document.removeEventListener('paste', handlePaste);
     };
-  }, [addImageToCanvas]);
+  }, []);
 
   const getImageAtPosition = (x: number, y: number): ProcessedImage | null => {
     for (let i = images.length - 1; i >= 0; i--) {
@@ -954,7 +1130,7 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPassword = import.meta.env.VITE_APP_PASSWORD || 'free420';
+    const correctPassword = (import.meta.env as any).VITE_APP_PASSWORD || 'free420';
     if (passwordInput === correctPassword) {
       setIsAuthenticated(true);
       setPasswordError(false);
@@ -1080,9 +1256,18 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
             onChange={handleFileUpload}
             className="hidden"
             accept="image/*"
+            multiple
         />
         <div className="absolute top-4 left-4 flex items-center gap-2 pointer-events-none">
-            <p className="text-lg text-black">BANANA WORLD v0.1</p>
+            <div className="flex items-center gap-1">
+                <span className="text-lg text-black font-bold">BANANA WORLD v0.2 By</span>
+                <button 
+                    onClick={() => window.open('https://carlosfr.es/projects', '_blank')}
+                    className="text-lg text-red-600 hover:text-red-800 transition-colors cursor-pointer font-bold underline"
+                >
+                    carlosfr.es
+                </button>
+            </div>
             <button 
                 onClick={() => setShowHelpModal(true)}
                 className="pointer-events-auto w-6 h-6 flex items-center justify-center border border-black rounded-full text-black bg-white/80"

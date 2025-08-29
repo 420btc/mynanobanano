@@ -13,6 +13,54 @@ const fileToBase64 = (file: File): Promise<string> => {
     });
 };
 
+export const generateImageWithMultiplePrompts = async (imageFiles: File[], prompt: string): Promise<{ imageUrl: string | null; text: string | null; }> => {
+    if (!process.env.API_KEY) {
+        throw new Error("API_KEY environment variable not set. Please ensure it's configured.");
+    }
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    // Convert all images to base64
+    const imageParts = await Promise.all(
+        imageFiles.map(async (file) => ({
+            inlineData: {
+                data: await fileToBase64(file),
+                mimeType: file.type,
+            },
+        }))
+    );
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: {
+            parts: [
+                ...imageParts,
+                {
+                    text: prompt,
+                },
+            ],
+        },
+        config: {
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
+        },
+    });
+    
+    let imageUrl: string | null = null;
+    let text: string | null = null;
+    
+    if (response.candidates && response.candidates.length > 0) {
+        for (const part of response.candidates[0].content.parts) {
+            if (part.inlineData && part.inlineData.data) {
+                const mimeType = part.inlineData.mimeType || 'image/png';
+                imageUrl = `data:${mimeType};base64,${part.inlineData.data}`;
+            } else if (part.text) {
+                text = part.text;
+            }
+        }
+    }
+    
+    return { imageUrl, text };
+};
+
 export const generateImageWithPrompt = async (imageFile: File, prompt: string): Promise<{ imageUrl: string | null; text: string | null; }> => {
     if (!process.env.API_KEY) {
         throw new Error("API_KEY environment variable not set. Please ensure it's configured.");

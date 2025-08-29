@@ -1,4 +1,4 @@
-# 🍌 Banana World v0.1
+# 🍌 Banana World v0.2 By carlosfr.es
 
 Una aplicación web interactiva para generar y manipular arte isométrico usando Nano Banana de Google. Crea mundos únicos con sprites de pixel art 3D y edificios arquitectónicos en perspectiva isométrica.
 
