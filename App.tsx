@@ -57,6 +57,13 @@ interface ProcessedImage {
   isVariation?: boolean;
   remixSuggestions?: string[];
   generatingPrompt?: string; // To display during loading
+  justGenerated?: boolean; // For entrance animation
+  generatedAt?: number; // Timestamp for animation timing
+  // Metadata for info modal
+  originalPrompt?: string; // The prompt used to generate this image
+  createdAt?: Date; // When generation started
+  completedAt?: Date; // When generation finished
+  generationDuration?: number; // Duration in milliseconds
 }
 
 interface ImageProcessingResult {
@@ -205,6 +212,7 @@ const App: React.FC = () => {
   const [animationTick, setAnimationTick] = useState(0);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [suggestionIndex, setSuggestionIndex] = useState(0);
 
   const selectedImage = useMemo(() =>
@@ -465,6 +473,17 @@ const App: React.FC = () => {
   }, [drawCanvas]);
 
   const generateFromImage = useCallback(async (file: File, id: number, prompt: string = IMAGE_PROMPT) => {
+    const startTime = new Date();
+    
+    // Update the image with start time and prompt
+    setImages(prev => prev.map(img => 
+      img.id === id ? { 
+        ...img, 
+        originalPrompt: prompt,
+        createdAt: startTime 
+      } : img
+    ));
+    
     try {
       const { imageUrl } = await generateImageWithPrompt(file, prompt);
       if (!imageUrl) throw new Error("Generation failed, no image returned.");
@@ -478,6 +497,9 @@ const App: React.FC = () => {
       
       const imageFileForSuggestions = await imageElementToFile(transparentImage, 'suggestion-source.png');
       const suggestions = await getRemixSuggestions(imageFileForSuggestions, REMIX_SUGGESTION_PROMPT);
+
+      const endTime = new Date();
+      const duration = endTime.getTime() - startTime.getTime();
 
       setImages(prev => prev.map(img => {
         if (img.id !== id) return img;
@@ -502,6 +524,8 @@ const App: React.FC = () => {
           sourcePreviewUrl: undefined,
           remixSuggestions: suggestions,
           generatingPrompt: undefined,
+          completedAt: endTime,
+          generationDuration: duration,
         }
       }));
     } catch (e) {
@@ -511,8 +535,19 @@ const App: React.FC = () => {
   }, []);
 
   const generateFromText = useCallback(async (userInput: string, id: number) => {
+    const startTime = new Date();
+    const fullPrompt = TEXT_PROMPT_TEMPLATE(userInput);
+    
+    // Update the image with start time and prompt
+    setImages(prev => prev.map(img => 
+      img.id === id ? { 
+        ...img, 
+        originalPrompt: fullPrompt,
+        createdAt: startTime 
+      } : img
+    ));
+    
     try {
-        const fullPrompt = TEXT_PROMPT_TEMPLATE(userInput);
         const { imageUrl } = await generateImageFromText(fullPrompt);
         if (!imageUrl) throw new Error("Generation failed, no image returned.");
 
@@ -525,6 +560,9 @@ const App: React.FC = () => {
         
         const imageFileForSuggestions = await imageElementToFile(transparentImage, 'suggestion-source.png');
         const suggestions = await getRemixSuggestions(imageFileForSuggestions, REMIX_SUGGESTION_PROMPT);
+
+        const endTime = new Date();
+        const duration = endTime.getTime() - startTime.getTime();
 
         setImages(prev => prev.map(img => {
             if (img.id !== id) return img;
@@ -546,6 +584,8 @@ const App: React.FC = () => {
                 y: currentCenterY - newHeight / 2,
                 isGenerating: false,
                 remixSuggestions: suggestions,
+                completedAt: endTime,
+                generationDuration: duration,
             }
         }));
     } catch(e) {
@@ -1026,6 +1066,65 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
             </div>
         )}
 
+        {showInfoModal && selectedImage && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowInfoModal(false)}>
+                <div className="bg-white p-6 border border-black shadow-lg font-mono text-black text-sm flex flex-col gap-4 max-w-md" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                        <h3 className="font-bold text-lg">Información del Asset</h3>
+                        <button 
+                            onClick={() => setShowInfoModal(false)}
+                            className="text-gray-500 hover:text-black transition-colors"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                        {selectedImage.originalPrompt && (
+                            <div>
+                                <span className="font-bold text-gray-700">Prompt:</span>
+                                <p className="mt-1 p-2 bg-gray-50 border border-gray-200 rounded text-xs break-words">
+                                    {selectedImage.originalPrompt}
+                                </p>
+                            </div>
+                        )}
+                        
+                        {selectedImage.createdAt && (
+                            <div>
+                                <span className="font-bold text-gray-700">Creado:</span>
+                                <p className="mt-1">
+                                    {selectedImage.createdAt.toLocaleDateString('es-ES')} a las {selectedImage.createdAt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                            </div>
+                        )}
+                        
+                        {selectedImage.generationDuration && (
+                            <div>
+                                <span className="font-bold text-gray-700">Tiempo de generación:</span>
+                                <p className="mt-1">
+                                    {(selectedImage.generationDuration / 1000).toFixed(1)} segundos
+                                </p>
+                            </div>
+                        )}
+                        
+                        {selectedImage.sourceText && (
+                            <div>
+                                <span className="font-bold text-gray-700">Tipo:</span>
+                                <p className="mt-1">Generado desde texto</p>
+                            </div>
+                        )}
+                        
+                        {selectedImage.sourceFile && (
+                            <div>
+                                <span className="font-bold text-gray-700">Tipo:</span>
+                                <p className="mt-1">Generado desde imagen</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
+
         {selectedImage && !selectedImage.isGenerating && (
             <div
                 className="absolute flex flex-col items-center gap-2"
@@ -1065,6 +1164,14 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
                         aria-label="Duplicate selected object"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
+                    <button
+                        onClick={() => setShowInfoModal(true)}
+                        disabled={isActionDisabled}
+                        className="h-10 w-10 p-2 box-border text-black disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors hover:bg-gray-100 border-r border-black"
+                        aria-label="Show asset information"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9 9h.01"/><path d="M15 9h.01"/><path d="M8 15s1.5 2 4 2 4-2 4-2"/></svg>
                     </button>
                     <button
                         onClick={handleDeleteSelected}

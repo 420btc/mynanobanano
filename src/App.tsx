@@ -57,6 +57,13 @@ interface ProcessedImage {
   isVariation?: boolean;
   remixSuggestions?: string[];
   generatingPrompt?: string; // To display during loading
+  justGenerated?: boolean; // For entrance animation
+  generatedAt?: number; // Timestamp for animation timing
+  // Metadata for info modal
+  originalPrompt?: string; // The prompt used to generate this image
+  createdAt?: Date; // When generation started
+  completedAt?: Date; // When generation finished
+  generationDuration?: number; // Duration in milliseconds
 }
 
 interface ImageProcessingResult {
