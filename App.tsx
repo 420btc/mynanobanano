@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import * as Tone from 'tone';
+import { Analytics } from '@vercel/analytics/react';
 import { generateImageWithPrompt, generateImageFromText, getRemixSuggestions } from './services/geminiService';
 
 // --- SOUND DEFINITIONS ---
@@ -1160,6 +1161,7 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
                 </button>
             </div>
         </div>
+        <Analytics />
     </div>
   );
 };
