@@ -40,12 +40,12 @@ const BUILDING_TEXT_PROMPT_TEMPLATE = (input: string) => BUILDING_MAIN(input) + 
 const BUILDING_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as an isometric 2D building on white background. No drop shadow, architectural style.`;
 
 // Anime mode constants
-const ANIME_PREFIX_IMAGE = "Convert this into a high-definition anime-style pixel art character. ";
-const ANIME_POSTFIX = "in ultra-detailed anime pixel art style, high resolution, vibrant colors, clean sprite on white background. No drop shadow, anime aesthetic with detailed shading.";
-const ANIME_MAIN = (subject: string) => `Create a high-definition anime pixel art of ${subject} `;
+const ANIME_PREFIX_IMAGE = "Convert this into a high-definition anime-style isometric character. ";
+const ANIME_POSTFIX = "in ultra-detailed anime isometric style, high resolution, vibrant colors, clean sprite on white background. No drop shadow, anime aesthetic with detailed shading, isometric perspective.";
+const ANIME_MAIN = (subject: string) => `Create a high-definition anime isometric art of ${subject} `;
 const ANIME_IMAGE_PROMPT = ANIME_PREFIX_IMAGE + ANIME_MAIN("this character/object") + ANIME_POSTFIX;
 const ANIME_TEXT_PROMPT_TEMPLATE = (input: string) => ANIME_MAIN(input) + ANIME_POSTFIX;
-const ANIME_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as ultra-detailed anime pixel art on white background. No drop shadow, high-definition anime style.`;
+const ANIME_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as ultra-detailed anime isometric art on white background. No drop shadow, high-definition anime style, isometric perspective.`;
 
 // Game mode types
 type GameMode = 'pixel' | 'building' | 'anime';
@@ -62,7 +62,7 @@ const GAME_MODES = {
   },
   anime: {
     name: 'Anime HD',
-    description: 'Pixel art anime ultra definido',
+    description: 'Arte anime isométrico ultra definido',
     icon: '🎌'
   }
 } as const;
