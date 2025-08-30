@@ -1,5 +1,7 @@
 About
-Generate
+Generate a video from an input image and text prompt using AI video generation models.
+
+This endpoint accepts a base64-encoded image and a text prompt, then returns an MP4 video file with H.264 encoding.
 
 1. Calling the API
 #
@@ -26,9 +28,10 @@ The client API handles the API submit protocol. It will handle the request statu
 
 import { fal } from "@fal-ai/client";
 
-const result = await fal.subscribe("fal-ai/trellis", {
+const result = await fal.subscribe("fal-ai/decart/lucy-5b/image-to-video", {
   input: {
-    image_url: "https://storage.googleapis.com/falserverless/web-examples/rodin3d/warriorwoman.png"
+    prompt: "A cat is walking slowly in the garden",
+    image_url: "https://v3.fal.media/files/monkey/OlpQEYh7oNeJ3qKsdiaym_ia5ECOgFbfcniMDu01_18_da73e078e0924472b51d92f3e3fba98c.png"
   },
   logs: true,
   onQueueUpdate: (update) => {
@@ -67,9 +70,10 @@ The client API provides a convenient way to submit requests to the model.
 
 import { fal } from "@fal-ai/client";
 
-const { request_id } = await fal.queue.submit("fal-ai/trellis", {
+const { request_id } = await fal.queue.submit("fal-ai/decart/lucy-5b/image-to-video", {
   input: {
-    image_url: "https://storage.googleapis.com/falserverless/web-examples/rodin3d/warriorwoman.png"
+    prompt: "A cat is walking slowly in the garden",
+    image_url: "https://v3.fal.media/files/monkey/OlpQEYh7oNeJ3qKsdiaym_ia5ECOgFbfcniMDu01_18_da73e078e0924472b51d92f3e3fba98c.png"
   },
   webhookUrl: "https://optional.webhook.url/for/results",
 });
@@ -80,7 +84,7 @@ You can fetch the status of a request to check if it is completed or still in pr
 
 import { fal } from "@fal-ai/client";
 
-const status = await fal.queue.status("fal-ai/trellis", {
+const status = await fal.queue.status("fal-ai/decart/lucy-5b/image-to-video", {
   requestId: "764cabcf-b745-4b3e-ae38-1200304cf45b",
   logs: true,
 });
@@ -91,7 +95,7 @@ Once the request is completed, you can fetch the result. See the Output Schema f
 
 import { fal } from "@fal-ai/client";
 
-const result = await fal.queue.result("fal-ai/trellis", {
+const result = await fal.queue.result("fal-ai/decart/lucy-5b/image-to-video", {
   requestId: "764cabcf-b745-4b3e-ae38-1200304cf45b"
 });
 console.log(result.data);
@@ -126,94 +130,34 @@ Read more about file handling in our file upload guide.
 #
 Input
 #
+prompt string
+Text description of the desired video content
+
 image_url string
-URL of the input image to convert to 3D
+URL of the image to use as the first frame
 
-seed integer
-Random seed for reproducibility
-
-ss_guidance_strength float
-Guidance strength for sparse structure generation Default value: 7.5
-
-ss_sampling_steps integer
-Sampling steps for sparse structure generation Default value: 12
-
-slat_guidance_strength float
-Guidance strength for structured latent generation Default value: 3
-
-slat_sampling_steps integer
-Sampling steps for structured latent generation Default value: 12
-
-mesh_simplify float
-Mesh simplification factor Default value: 0.95
-
-texture_size TextureSizeEnum
-Texture resolution Default value: "1024"
-
-Possible enum values: 512, 1024, 2048
+sync_mode boolean
+If set to true, the function will wait for the image to be generated and uploaded before returning the response. This will increase the latency of the function but it allows you to get the image directly in the response without going through the CDN. Default value: true
 
 
 {
-  "image_url": "https://storage.googleapis.com/falserverless/web-examples/rodin3d/warriorwoman.png",
-  "ss_guidance_strength": 7.5,
-  "ss_sampling_steps": 12,
-  "slat_guidance_strength": 3,
-  "slat_sampling_steps": 12,
-  "mesh_simplify": 0.95,
-  "texture_size": 1024
+  "prompt": "A cat is walking slowly in the garden",
+  "image_url": "https://v3.fal.media/files/monkey/OlpQEYh7oNeJ3qKsdiaym_ia5ECOgFbfcniMDu01_18_da73e078e0924472b51d92f3e3fba98c.png",
+  "sync_mode": true
 }
 Output
 #
-model_mesh File
-Generated 3D mesh file
-
-timings Timings
-Processing timings
+video File
+The generated MP4 video with H.264 encoding
 
 
 {
-  "model_mesh": {
-    "url": "",
-    "content_type": "image/png",
-    "file_name": "z9RV14K95DvU.png",
-    "file_size": 4404019
+  "video": {
+    "url": "https://v3.fal.media/files/kangaroo/rIFaCsyWvBxYBKw3cPbOU_indir.mp4"
   }
 }
 Other types
 #
-MultiImageInputModel
-#
-image_urls list<string>
-List of URLs of input images to convert to 3D
-
-seed integer
-Random seed for reproducibility
-
-ss_guidance_strength float
-Guidance strength for sparse structure generation Default value: 7.5
-
-ss_sampling_steps integer
-Sampling steps for sparse structure generation Default value: 12
-
-slat_guidance_strength float
-Guidance strength for structured latent generation Default value: 3
-
-slat_sampling_steps integer
-Sampling steps for structured latent generation Default value: 12
-
-mesh_simplify float
-Mesh simplification factor Default value: 0.95
-
-texture_size TextureSizeEnum
-Texture resolution Default value: "1024"
-
-Possible enum values: 512, 1024, 2048
-
-multiimage_algo MultiimageAlgoEnum
-Algorithm for multi-image generation Default value: "stochastic"
-
-Possible enum values: stochastic, multidiffusion
-
 File
 #
 url string
@@ -228,4 +172,5 @@ The name of the file. It will be auto-generated if not provided.
 file_size integer
 The size of the file in bytes.
 
-Related Models
+file_data string
+File data

@@ -80,6 +80,27 @@ export interface TrellisOutput {
   timings?: any;
 }
 
+// Video interfaces
+export interface VideoInput {
+  prompt: string;
+  image_url: string;
+  sync_mode?: boolean;
+}
+
+export interface VideoOutput {
+  video: {
+    url: string;
+    content_type?: string;
+    file_name?: string;
+    file_size?: number;
+  };
+}
+
+export interface VideoResult {
+  data: VideoOutput;
+  requestId: string;
+}
+
 // Union types
 export type Model3DInput = HunyuanInput | TrellisInput;
 export type Model3DOutput = HunyuanNormalOutput | HunyuanTurboOutput | TrellisOutput;
@@ -256,6 +277,89 @@ export const convertImageElementTo3D = async (
   
   // Convert to 3D
   return convertImageTo3D(uploadedUrl, modelType, options);
+};
+
+/**
+ * Convert an image to video using AI video generation
+ * @param imageUrl - URL of the image to use as first frame
+ * @param prompt - Text description of the desired video content
+ * @param options - Optional parameters for the conversion
+ * @returns Promise with the video data
+ */
+export const convertImageToVideo = async (
+  imageUrl: string,
+  prompt: string,
+  options: Partial<VideoInput> = {}
+): Promise<VideoResult> => {
+  if (!import.meta.env.VITE_FAL_API_KEY) {
+    throw new Error("VITE_FAL_API_KEY environment variable not set. Please ensure it's configured in your .env.local file.");
+  }
+
+  const input: VideoInput = {
+    prompt,
+    image_url: imageUrl,
+    sync_mode: options.sync_mode !== false,
+    ...options
+  };
+
+  // Debug logging
+  console.log('🎬 Converting to video with:', {
+    prompt,
+    imageUrl,
+    inputKeys: Object.keys(input)
+  });
+
+  try {
+    const result = await fal.subscribe("fal-ai/decart/lucy-5b/image-to-video", {
+      input,
+      logs: true,
+      onQueueUpdate: (update) => {
+        if (update.status === "IN_PROGRESS") {
+          update.logs.map((log) => log.message).forEach(console.log);
+        }
+      },
+    });
+
+    return result as VideoResult;
+  } catch (error) {
+    console.error("Error converting image to video:", error);
+    throw new Error(`Failed to convert image to video: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+};
+
+/**
+ * Convert an image element to video
+ * @param imageElement - HTML image element
+ * @param prompt - Text description of the desired video content
+ * @param fileName - Name for the temporary file
+ * @param options - Optional parameters for the conversion
+ * @returns Promise with the video data
+ */
+export const convertImageElementToVideo = async (
+  imageElement: HTMLImageElement,
+  prompt: string,
+  fileName: string = 'image.png',
+  options: Partial<VideoInput> = {}
+): Promise<VideoResult> => {
+  // Convert image element to canvas and then to file
+  const canvas = document.createElement('canvas');
+  canvas.width = imageElement.naturalWidth;
+  canvas.height = imageElement.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx) {
+    throw new Error('Could not get 2d context for image conversion');
+  }
+  
+  ctx.drawImage(imageElement, 0, 0);
+  const dataUrl = canvas.toDataURL('image/png');
+  const file = dataUrlToFile(dataUrl, fileName);
+  
+  // Upload file to Fal storage
+  const uploadedUrl = await uploadFileToFal(file);
+  
+  // Convert to video
+  return convertImageToVideo(uploadedUrl, prompt, options);
 };
 
 /**

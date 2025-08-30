@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import * as Tone from 'tone';
 import { Analytics } from '@vercel/analytics/react';
 import { generateImageWithPrompt, generateImageWithMultiplePrompts, generateImageFromText, getRemixSuggestions } from './services/geminiService';
-import { convertImageElementTo3D, downloadFile, Model3DType } from './services/falService';
+import { convertImageElementTo3D, downloadFile, Model3DType, convertImageElementToVideo, VideoResult } from './services/falService';
 
 // --- SOUND DEFINITIONS ---
 const synth = new Tone.Synth({
@@ -165,6 +165,13 @@ interface ProcessedImage {
     isGenerating: boolean;
     error?: string;
     modelType?: Model3DType;
+  };
+  // Video properties
+  video?: {
+    videoUrl: string;
+    isGenerating: boolean;
+    error?: string;
+    prompt?: string;
   };
 }
 
@@ -329,6 +336,10 @@ const App: React.FC = () => {
   const [selected3DModel, setSelected3DModel] = useState<{ meshUrl: string; glbUrl?: string; pbrUrl?: string; modelType?: Model3DType } | null>(null);
   const [show3DModelSelector, setShow3DModelSelector] = useState(false);
   const [selectedModelType, setSelectedModelType] = useState<Model3DType>('hunyuan-turbo');
+  const [showVideoPrompt, setShowVideoPrompt] = useState(false);
+  const [videoPromptInput, setVideoPromptInput] = useState('');
+  const [showVideoViewer, setShowVideoViewer] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<{ videoUrl: string; prompt?: string } | null>(null);
 
   const selectedImage = useMemo(() =>
     selectedImageId !== null ? images.find(img => img.id === selectedImageId) : null,
@@ -1458,6 +1469,96 @@ const handleDownload3D = (format?: 'glb' | 'pbr' | 'mesh') => {
     }
 };
 
+const handleConvertToVideo = async (prompt: string) => {
+    if (!selectedImage?.processedImage || !prompt.trim()) return;
+    
+    try {
+        await ensureAudioContext();
+        synth.triggerAttackRelease('B4', '8n');
+        
+        // Debug logging
+        console.log('🎬 Starting video conversion with prompt:', prompt);
+        
+        // Mark as generating video
+        setImages(prev => prev.map(img => 
+            img.id === selectedImageId 
+                ? { ...img, video: { videoUrl: '', isGenerating: true, prompt } }
+                : img
+        ));
+        
+        // Convert image to video
+        const result = await convertImageElementToVideo(
+            selectedImage.processedImage,
+            prompt,
+            `asset_${selectedImage.id}.png`
+        );
+        
+        console.log('✅ Video conversion completed:', {
+            videoUrl: result.data.video.url,
+            prompt
+        });
+        
+        // Update with video data
+        setImages(prev => prev.map(img => 
+            img.id === selectedImageId 
+                ? { 
+                    ...img, 
+                    video: {
+                        videoUrl: result.data.video.url,
+                        isGenerating: false,
+                        prompt
+                    }
+                }
+                : img
+        ));
+        
+        // Play success sound
+        await ensureAudioContext();
+        synth.triggerAttackRelease('D6', '8n');
+        
+    } catch (error) {
+        console.error('Error converting to video:', error);
+        
+        // Update with error
+        setImages(prev => prev.map(img => 
+            img.id === selectedImageId 
+                ? { 
+                    ...img, 
+                    video: {
+                        videoUrl: '',
+                        isGenerating: false,
+                        error: error instanceof Error ? error.message : 'Error desconocido',
+                        prompt
+                    }
+                }
+                : img
+        ));
+        
+        // Play error sound
+        await ensureAudioContext();
+        synth.triggerAttackRelease('F3', '8n');
+    }
+};
+
+const handleViewVideo = () => {
+    if (selectedImage?.video?.videoUrl) {
+        setSelectedVideo({
+            videoUrl: selectedImage.video.videoUrl,
+            prompt: selectedImage.video.prompt
+        });
+        setShowVideoViewer(true);
+    }
+};
+
+const handleDownloadVideo = () => {
+    if (!selectedImage?.video?.videoUrl) return;
+    
+    const url = selectedImage.video.videoUrl;
+    const fileName = `asset_${selectedImage.id}_video.mp4`;
+    
+    downloadFile(url, fileName);
+};
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
@@ -2023,6 +2124,25 @@ const handleDownload3D = (format?: 'glb' | 'pbr' | 'mesh') => {
                         )}
                     </button>
                     <button
+                        onClick={selectedImage.video?.videoUrl ? handleViewVideo : () => setShowVideoPrompt(true)}
+                        disabled={isActionDisabled || selectedImage.video?.isGenerating}
+                        className="h-10 w-10 p-2 box-border text-black disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors hover:bg-gray-100 border-r border-black relative"
+                        aria-label={selectedImage.video?.videoUrl ? "View video" : "Create video"}
+                    >
+                        {selectedImage.video?.isGenerating ? (
+                            <div className="animate-spin">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-1 0v2.25a.75.75 0 0 1-1.5 0V3a9 9 0 1 0 9 9h-2.25a.75.75 0 0 1 0-1.5H21Z"/></svg>
+                            </div>
+                        ) : selectedImage.video?.videoUrl ? (
+                            <span className="text-xs font-bold">▶️</span>
+                        ) : (
+                            <span className="text-xs font-bold">🎬</span>
+                        )}
+                        {selectedImage.video?.error && (
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full" title={selectedImage.video.error}></div>
+                        )}
+                    </button>
+                    <button
                         onClick={handleDeleteSelected}
                         disabled={isActionDisabled}
                         className="h-10 w-10 p-2 box-border text-black disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors hover:bg-gray-100"
@@ -2222,6 +2342,64 @@ const handleDownload3D = (format?: 'glb' | 'pbr' | 'mesh') => {
             </div>
         )}
 
+        {/* Video Prompt Modal */}
+        {showVideoPrompt && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setShowVideoPrompt(false)}>
+                <div className="bg-white border border-black shadow-lg max-w-md w-full mx-4 flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-black">
+                        <h3 className="font-mono text-lg font-bold text-black">Crear Video</h3>
+                        <button 
+                            onClick={() => setShowVideoPrompt(false)}
+                            className="text-gray-500 hover:text-black transition-colors"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    
+                    {/* Prompt Input */}
+                    <div className="p-4">
+                        <label className="block text-sm font-mono text-black mb-2">
+                            Describe el movimiento o acción para el video:
+                        </label>
+                        <textarea
+                            value={videoPromptInput}
+                            onChange={(e) => setVideoPromptInput(e.target.value)}
+                            placeholder="Ej: Un gato caminando lentamente en el jardín, una persona saludando con la mano, un objeto rotando suavemente..."
+                            className="w-full h-24 p-3 border border-black text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            maxLength={200}
+                        />
+                        <div className="text-xs text-gray-500 mt-1 text-right">
+                            {videoPromptInput.length}/200 caracteres
+                        </div>
+                    </div>
+                    
+                    {/* Actions */}
+                    <div className="p-4 border-t border-gray-200 flex gap-2">
+                        <button
+                            onClick={() => setShowVideoPrompt(false)}
+                            className="flex-1 px-4 py-2 border border-black text-black font-mono text-sm hover:bg-gray-100 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (videoPromptInput.trim()) {
+                                    handleConvertToVideo(videoPromptInput.trim());
+                                    setShowVideoPrompt(false);
+                                    setVideoPromptInput('');
+                                }
+                            }}
+                            disabled={!videoPromptInput.trim()}
+                            className="flex-1 px-4 py-2 bg-black text-white font-mono text-sm hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            🎬 Generar Video
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* 3D Viewer Modal */}
         {show3DViewer && selected3DModel && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setShow3DViewer(false)}>
@@ -2292,6 +2470,66 @@ const handleDownload3D = (format?: 'glb' | 'pbr' | 'mesh') => {
                     <div className="p-4 border-t border-gray-200 bg-gray-50">
                         <p className="text-xs font-mono text-gray-600 text-center">
                             Usa el mouse para rotar, zoom y mover el modelo 3D. Descarga en diferentes formatos usando los botones superiores.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Video Viewer Modal */}
+        {showVideoViewer && selectedVideo && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setShowVideoViewer(false)}>
+                <div className="bg-white border border-black shadow-lg max-w-4xl max-h-[90vh] w-full mx-4 flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-black">
+                        <h3 className="font-mono text-lg font-bold text-black">Visor de Video</h3>
+                        <div className="flex items-center gap-2">
+                            {/* Download button */}
+                            <button
+                                onClick={handleDownloadVideo}
+                                className="px-3 py-1 border border-black text-black text-xs font-mono hover:bg-gray-100 transition-colors"
+                                title="Descargar video"
+                            >
+                                Descargar MP4
+                            </button>
+                            <button 
+                                onClick={() => setShowVideoViewer(false)}
+                                className="text-gray-500 hover:text-black transition-colors ml-2"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* Video Content */}
+                    <div className="flex-1 p-4 flex items-center justify-center bg-gray-50">
+                        <div className="w-full max-w-2xl bg-white border border-gray-200 rounded flex items-center justify-center">
+                            <video
+                                src={selectedVideo.videoUrl}
+                                controls
+                                autoPlay
+                                loop
+                                className="w-full h-auto max-h-96 rounded"
+                                style={{maxHeight: '400px'}}
+                            >
+                                Tu navegador no soporta el elemento video.
+                            </video>
+                        </div>
+                    </div>
+                    
+                    {/* Video Info */}
+                    {selectedVideo.prompt && (
+                        <div className="p-4 border-t border-gray-200 bg-gray-50">
+                            <p className="text-xs font-mono text-gray-600">
+                                <span className="font-bold">Prompt:</span> {selectedVideo.prompt}
+                            </p>
+                        </div>
+                    )}
+                    
+                    {/* Instructions */}
+                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                        <p className="text-xs font-mono text-gray-600 text-center">
+                            Video generado con IA. Usa los controles para reproducir, pausar y ajustar el volumen.
                         </p>
                     </div>
                 </div>
