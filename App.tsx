@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import * as Tone from 'tone';
 import { Analytics } from '@vercel/analytics/react';
 import { generateImageWithPrompt, generateImageWithMultiplePrompts, generateImageFromText, getRemixSuggestions } from './services/geminiService';
-import { convertImageElementTo3D, downloadFile } from './services/falService';
+import { convertImageElementTo3D, downloadFile, Model3DType } from './services/falService';
 
 // --- SOUND DEFINITIONS ---
 const synth = new Tone.Synth({
@@ -94,6 +94,31 @@ const GAME_MODES = {
   }
 } as const;
 
+// 3D Models configuration
+const MODEL_3D_OPTIONS = {
+  'hunyuan-normal': {
+    name: 'Hunyuan Normal',
+    description: 'Modelo completo con GLB, PBR y MESH',
+    icon: '🏆',
+    speed: 'Lento',
+    quality: 'Alta'
+  },
+  'hunyuan-turbo': {
+    name: 'Hunyuan Turbo',
+    description: 'Modelo rápido, solo GLB',
+    icon: '⚡',
+    speed: 'Rápido',
+    quality: 'Media'
+  },
+  'trellis': {
+    name: 'Trellis',
+    description: 'Modelo avanzado de Microsoft',
+    icon: '🔬',
+    speed: 'Medio',
+    quality: 'Muy Alta'
+  }
+} as const;
+
 const IMAGE_WIDTH = 375; // Increased from 250
 
 // Scale options
@@ -135,8 +160,11 @@ interface ProcessedImage {
   // 3D Model properties
   model3D?: {
     meshUrl: string;
+    glbUrl?: string;
+    pbrUrl?: string;
     isGenerating: boolean;
     error?: string;
+    modelType?: Model3DType;
   };
 }
 
@@ -298,7 +326,9 @@ const App: React.FC = () => {
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [show3DViewer, setShow3DViewer] = useState(false);
-  const [selected3DModel, setSelected3DModel] = useState<{ meshUrl: string } | null>(null);
+  const [selected3DModel, setSelected3DModel] = useState<{ meshUrl: string; glbUrl?: string; pbrUrl?: string; modelType?: Model3DType } | null>(null);
+  const [show3DModelSelector, setShow3DModelSelector] = useState(false);
+  const [selectedModelType, setSelectedModelType] = useState<Model3DType>('hunyuan-turbo');
 
   const selectedImage = useMemo(() =>
     selectedImageId !== null ? images.find(img => img.id === selectedImageId) : null,
@@ -1306,22 +1336,48 @@ const handleConvertTo3D = async () => {
                 : img
         ));
         
+        // Debug logging
+        console.log('🎯 Starting 3D conversion with model:', selectedModelType);
+        
         // Convert image to 3D
         const result = await convertImageElementTo3D(
             selectedImage.processedImage,
             `asset_${selectedImage.id}.png`,
+            selectedModelType,
             { textured_mesh: true }
         );
         
-        // Update with 3D model data
+        console.log('✅ 3D conversion completed:', {
+            modelType: result.modelType,
+            dataKeys: Object.keys(result.data)
+        });
+        
+        // Update with 3D model data based on model type
+        const model3DData: any = {
+            isGenerating: false,
+            modelType: result.modelType
+        };
+        
+        // Handle different output formats based on model type
+        if (result.modelType === 'hunyuan-normal') {
+            const data = result.data as any;
+            model3DData.glbUrl = data.model_glb?.url;
+            model3DData.pbrUrl = data.model_glb_pbr?.url;
+            model3DData.meshUrl = data.model_mesh?.url || data.model_glb?.url;
+        } else {
+            // For hunyuan-turbo and trellis
+            const data = result.data as any;
+            model3DData.meshUrl = data.model_mesh?.url;
+            if (result.modelType === 'hunyuan-turbo') {
+                model3DData.glbUrl = data.model_mesh?.url;
+            }
+        }
+        
         setImages(prev => prev.map(img => 
             img.id === selectedImageId 
                 ? { 
                     ...img, 
-                    model3D: {
-                        meshUrl: result.data.model_mesh.url,
-                        isGenerating: false
-                    }
+                    model3D: model3DData
                 }
                 : img
         ));
@@ -1356,19 +1412,50 @@ const handleConvertTo3D = async () => {
 const handleView3D = () => {
     if (selectedImage?.model3D?.meshUrl) {
         setSelected3DModel({
-            meshUrl: selectedImage.model3D.meshUrl
+            meshUrl: selectedImage.model3D.meshUrl,
+            glbUrl: selectedImage.model3D.glbUrl,
+            pbrUrl: selectedImage.model3D.pbrUrl,
+            modelType: selectedImage.model3D.modelType
         });
         setShow3DViewer(true);
     }
 };
 
-const handleDownload3D = () => {
-    if (!selectedImage?.model3D?.meshUrl) return;
+const handleDownload3D = (format?: 'glb' | 'pbr' | 'mesh') => {
+    if (!selectedImage?.model3D) return;
     
-    const url = selectedImage.model3D.meshUrl;
-    const fileName = `asset_${selectedImage.id}.glb`;
+    let url: string | undefined;
+    let fileName: string;
     
-    downloadFile(url, fileName);
+    // If no format specified, use the best available format
+    if (!format) {
+        if (selectedImage.model3D.glbUrl) {
+            url = selectedImage.model3D.glbUrl;
+            fileName = `asset_${selectedImage.id}.glb`;
+        } else {
+            url = selectedImage.model3D.meshUrl;
+            fileName = `asset_${selectedImage.id}.glb`;
+        }
+    } else {
+        switch (format) {
+            case 'glb':
+                url = selectedImage.model3D.glbUrl || selectedImage.model3D.meshUrl;
+                fileName = `asset_${selectedImage.id}.glb`;
+                break;
+            case 'pbr':
+                url = selectedImage.model3D.pbrUrl;
+                fileName = `asset_${selectedImage.id}_pbr.glb`;
+                break;
+            case 'mesh':
+                url = selectedImage.model3D.meshUrl;
+                fileName = `asset_${selectedImage.id}_mesh.glb`;
+                break;
+        }
+    }
+    
+    if (url) {
+        downloadFile(url, fileName);
+    }
 };
 
   useEffect(() => {
@@ -1917,10 +2004,10 @@ const handleDownload3D = () => {
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     </button>
                     <button
-                        onClick={selectedImage.model3D?.meshUrl ? handleView3D : handleConvertTo3D}
+                        onClick={selectedImage.model3D?.meshUrl ? handleView3D : () => setShow3DModelSelector(true)}
                         disabled={isActionDisabled || selectedImage.model3D?.isGenerating}
                         className="h-10 w-10 p-2 box-border text-black disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors hover:bg-gray-100 border-r border-black relative"
-                        aria-label={selectedImage.model3D?.meshUrl ? "View 3D model" : "Convert to 3D"}
+                        aria-label={selectedImage.model3D?.meshUrl ? "View 3D model" : "Select 3D model"}
                     >
                         {selectedImage.model3D?.isGenerating ? (
                             <div className="animate-spin">
@@ -2081,6 +2168,60 @@ const handleDownload3D = () => {
             </div>
         </div>
 
+        {/* 3D Model Selector Modal */}
+        {show3DModelSelector && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setShow3DModelSelector(false)}>
+                <div className="bg-white border border-black shadow-lg max-w-md w-full mx-4 flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-black">
+                        <h3 className="font-mono text-lg font-bold text-black">Seleccionar Modelo 3D</h3>
+                        <button 
+                            onClick={() => setShow3DModelSelector(false)}
+                            className="text-gray-500 hover:text-black transition-colors"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    
+                    {/* Model Options */}
+                    <div className="p-4 space-y-3">
+                        {Object.entries(MODEL_3D_OPTIONS).map(([key, model]) => (
+                            <button
+                                key={key}
+                                onClick={() => {
+                                    setSelectedModelType(key as Model3DType);
+                                    setShow3DModelSelector(false);
+                                    handleConvertTo3D();
+                                }}
+                                className={`w-full p-4 border border-black text-left hover:bg-gray-50 transition-colors ${
+                                    selectedModelType === key ? 'bg-gray-100' : 'bg-white'
+                                }`}
+                            >
+                                <div className="flex items-start gap-3">
+                                    <span className="text-2xl">{model.icon}</span>
+                                    <div className="flex-1">
+                                        <div className="font-bold text-black">{model.name}</div>
+                                        <div className="text-sm text-gray-600 mt-1">{model.description}</div>
+                                        <div className="flex gap-4 mt-2 text-xs">
+                                            <span className="text-blue-600">Velocidad: {model.speed}</span>
+                                            <span className="text-green-600">Calidad: {model.quality}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                    
+                    {/* Current Selection */}
+                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                        <p className="text-xs font-mono text-gray-600 text-center">
+                            Modelo actual: <span className="font-bold">{MODEL_3D_OPTIONS[selectedModelType].name}</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* 3D Viewer Modal */}
         {show3DViewer && selected3DModel && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setShow3DViewer(false)}>
@@ -2089,14 +2230,40 @@ const handleDownload3D = () => {
                     <div className="flex items-center justify-between p-4 border-b border-black">
                         <h3 className="font-mono text-lg font-bold text-black">Visor 3D</h3>
                         <div className="flex items-center gap-2">
-                            {/* Download button */}
-                            <button
-                                onClick={handleDownload3D}
-                                className="px-3 py-1 border border-black text-black text-xs font-mono hover:bg-gray-100 transition-colors"
-                                title="Descargar modelo 3D"
-                            >
-                                Descargar GLB
-                            </button>
+                            {/* Download buttons based on model type */}
+                            {selected3DModel.glbUrl && (
+                                <button
+                                    onClick={() => handleDownload3D('glb')}
+                                    className="px-3 py-1 border border-black text-black text-xs font-mono hover:bg-gray-100 transition-colors"
+                                    title="Descargar modelo GLB"
+                                >
+                                    GLB
+                                </button>
+                            )}
+                            {selected3DModel.pbrUrl && (
+                                <button
+                                    onClick={() => handleDownload3D('pbr')}
+                                    className="px-3 py-1 border border-black text-black text-xs font-mono hover:bg-gray-100 transition-colors"
+                                    title="Descargar modelo PBR"
+                                >
+                                    PBR
+                                </button>
+                            )}
+                            {selected3DModel.meshUrl && (
+                                <button
+                                    onClick={() => handleDownload3D('mesh')}
+                                    className="px-3 py-1 border border-black text-black text-xs font-mono hover:bg-gray-100 transition-colors"
+                                    title="Descargar mesh"
+                                >
+                                    MESH
+                                </button>
+                            )}
+                            {/* Model info */}
+                            {selected3DModel.modelType && (
+                                <span className="px-2 py-1 bg-gray-100 text-xs font-mono text-gray-600 rounded">
+                                    {MODEL_3D_OPTIONS[selected3DModel.modelType].name}
+                                </span>
+                            )}
                             <button 
                                 onClick={() => setShow3DViewer(false)}
                                 className="text-gray-500 hover:text-black transition-colors ml-2"
@@ -2124,7 +2291,7 @@ const handleDownload3D = () => {
                     {/* Instructions */}
                     <div className="p-4 border-t border-gray-200 bg-gray-50">
                         <p className="text-xs font-mono text-gray-600 text-center">
-                            Usa el mouse para rotar, zoom y mover el modelo 3D. Haz clic en "Descargar GLB" para guardar el modelo.
+                            Usa el mouse para rotar, zoom y mover el modelo 3D. Descarga en diferentes formatos usando los botones superiores.
                         </p>
                     </div>
                 </div>

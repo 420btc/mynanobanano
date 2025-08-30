@@ -7,16 +7,60 @@ if (import.meta.env.VITE_FAL_API_KEY) {
   });
 }
 
-export interface Hunyuan3DInput {
-  input_image_url: string;
+// Model types
+export type Model3DType = 'hunyuan-normal' | 'hunyuan-turbo' | 'trellis';
+
+// Base input interface
+export interface Base3DInput {
+  input_image_url?: string;
+  image_url?: string;
   seed?: number;
+}
+
+// Hunyuan specific inputs
+export interface HunyuanInput extends Base3DInput {
+  input_image_url: string;
   num_inference_steps?: number;
   guidance_scale?: number;
   octree_resolution?: number;
   textured_mesh?: boolean;
 }
 
-export interface Hunyuan3DOutput {
+// Trellis specific inputs
+export interface TrellisInput extends Base3DInput {
+  image_url: string;
+  ss_guidance_strength?: number;
+  ss_sampling_steps?: number;
+  slat_guidance_strength?: number;
+  slat_sampling_steps?: number;
+  mesh_simplify?: number;
+  texture_size?: 512 | 1024 | 2048;
+}
+
+// Output interfaces
+export interface HunyuanNormalOutput {
+  model_glb: {
+    file_size: number;
+    file_name: string;
+    content_type: string;
+    url: string;
+  };
+  model_glb_pbr?: {
+    file_size: number;
+    file_name: string;
+    content_type: string;
+    url: string;
+  };
+  model_mesh?: {
+    file_size: number;
+    file_name: string;
+    content_type: string;
+    url: string;
+  };
+  seed: number;
+}
+
+export interface HunyuanTurboOutput {
   model_mesh: {
     file_size: number;
     file_name: string;
@@ -26,36 +70,101 @@ export interface Hunyuan3DOutput {
   seed: number;
 }
 
-export interface Hunyuan3DResult {
-  data: Hunyuan3DOutput;
+export interface TrellisOutput {
+  model_mesh: {
+    file_size: number;
+    file_name: string;
+    content_type: string;
+    url: string;
+  };
+  timings?: any;
+}
+
+// Union types
+export type Model3DInput = HunyuanInput | TrellisInput;
+export type Model3DOutput = HunyuanNormalOutput | HunyuanTurboOutput | TrellisOutput;
+
+export interface Model3DResult {
+  data: Model3DOutput;
   requestId: string;
+  modelType: Model3DType;
 }
 
 /**
- * Convert a 2D image to a 3D model using Hunyuan 3D
+ * Get model endpoint and prepare input based on model type
+ */
+const getModelConfig = (modelType: Model3DType, imageUrl: string, options: any = {}) => {
+  switch (modelType) {
+    case 'hunyuan-normal':
+      return {
+        endpoint: "fal-ai/hunyuan3d-v21",
+        input: {
+          input_image_url: imageUrl,
+          num_inference_steps: options.num_inference_steps || 50,
+          guidance_scale: options.guidance_scale || 7.5,
+          octree_resolution: options.octree_resolution || 256,
+          textured_mesh: options.textured_mesh !== false,
+          ...options
+        } as HunyuanInput
+      };
+    case 'hunyuan-turbo':
+      return {
+        endpoint: "fal-ai/hunyuan3d/v2/turbo",
+        input: {
+          input_image_url: imageUrl,
+          num_inference_steps: options.num_inference_steps || 50,
+          guidance_scale: options.guidance_scale || 7.5,
+          octree_resolution: options.octree_resolution || 256,
+          textured_mesh: options.textured_mesh !== false,
+          ...options
+        } as HunyuanInput
+      };
+    case 'trellis':
+      return {
+        endpoint: "fal-ai/trellis",
+        input: {
+          image_url: imageUrl,
+          ss_guidance_strength: options.ss_guidance_strength || 7.5,
+          ss_sampling_steps: options.ss_sampling_steps || 12,
+          slat_guidance_strength: options.slat_guidance_strength || 3,
+          slat_sampling_steps: options.slat_sampling_steps || 12,
+          mesh_simplify: options.mesh_simplify || 0.95,
+          texture_size: options.texture_size || 1024,
+          ...options
+        } as TrellisInput
+      };
+    default:
+      throw new Error(`Unsupported model type: ${modelType}`);
+  }
+};
+
+/**
+ * Convert a 2D image to a 3D model using the specified model
  * @param imageUrl - URL of the image to convert to 3D
+ * @param modelType - Type of 3D model to use
  * @param options - Optional parameters for the conversion
  * @returns Promise with the 3D model data
  */
 export const convertImageTo3D = async (
   imageUrl: string,
-  options: Partial<Hunyuan3DInput> = {}
-): Promise<Hunyuan3DResult> => {
+  modelType: Model3DType = 'hunyuan-turbo',
+  options: any = {}
+): Promise<Model3DResult> => {
   if (!import.meta.env.VITE_FAL_API_KEY) {
     throw new Error("VITE_FAL_API_KEY environment variable not set. Please ensure it's configured in your .env.local file.");
   }
 
-  const input: Hunyuan3DInput = {
-    input_image_url: imageUrl,
-    num_inference_steps: options.num_inference_steps || 50,
-    guidance_scale: options.guidance_scale || 7.5,
-    octree_resolution: options.octree_resolution || 256,
-    textured_mesh: options.textured_mesh || true,
-    ...options
-  };
+  const { endpoint, input } = getModelConfig(modelType, imageUrl, options);
+  
+  // Debug logging
+  console.log('🔧 Converting to 3D with:', {
+    modelType,
+    endpoint,
+    inputKeys: Object.keys(input)
+  });
 
   try {
-    const result = await fal.subscribe("fal-ai/hunyuan3d/v2/turbo", {
+    const result = await fal.subscribe(endpoint, {
       input,
       logs: true,
       onQueueUpdate: (update) => {
@@ -65,7 +174,10 @@ export const convertImageTo3D = async (
       },
     });
 
-    return result as Hunyuan3DResult;
+    return {
+      ...result,
+      modelType
+    } as Model3DResult;
   } catch (error) {
     console.error("Error converting image to 3D:", error);
     throw new Error(`Failed to convert image to 3D: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -115,14 +227,16 @@ export const dataUrlToFile = (dataUrl: string, fileName: string): File => {
  * Convert an image element to 3D model
  * @param imageElement - HTML image element
  * @param fileName - Name for the temporary file
+ * @param modelType - Type of 3D model to use
  * @param options - Optional parameters for the conversion
  * @returns Promise with the 3D model data
  */
 export const convertImageElementTo3D = async (
   imageElement: HTMLImageElement,
   fileName: string = 'image.png',
-  options: Partial<Hunyuan3DInput> = {}
-): Promise<Hunyuan3DResult> => {
+  modelType: Model3DType = 'hunyuan-turbo',
+  options: any = {}
+): Promise<Model3DResult> => {
   // Convert image element to canvas and then to file
   const canvas = document.createElement('canvas');
   canvas.width = imageElement.naturalWidth;
@@ -141,7 +255,7 @@ export const convertImageElementTo3D = async (
   const uploadedUrl = await uploadFileToFal(file);
   
   // Convert to 3D
-  return convertImageTo3D(uploadedUrl, options);
+  return convertImageTo3D(uploadedUrl, modelType, options);
 };
 
 /**
