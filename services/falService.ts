@@ -9,7 +9,7 @@ if (import.meta.env.VITE_FAL_API_KEY) {
 
 // Model types
 export type Model3DType = 'hunyuan-normal' | 'hunyuan-turbo' | 'trellis';
-export type VideoModelType = 'lucy' | 'minimax' | 'kling';
+export type VideoModelType = 'lucy' | 'minimax' | 'kling' | 'ltxv';
 
 // Base input interface
 export interface Base3DInput {
@@ -103,6 +103,27 @@ export interface KlingVideoInput {
   cfg_scale?: number;
 }
 
+export interface LTXVVideoInput {
+  prompt: string;
+  image_url: string;
+  negative_prompt?: string;
+  resolution?: "480p" | "720p";
+  aspect_ratio?: "9:16" | "1:1" | "16:9" | "auto";
+  seed?: number;
+  num_frames?: number;
+  first_pass_num_inference_steps?: number;
+  second_pass_num_inference_steps?: number;
+  second_pass_skip_initial_steps?: number;
+  frame_rate?: number;
+  expand_prompt?: boolean;
+  reverse_video?: boolean;
+  enable_safety_checker?: boolean;
+  enable_detail_pass?: boolean;
+  temporal_adain_factor?: number;
+  tone_map_compression_ratio?: number;
+  constant_rate_factor?: number;
+}
+
 export interface VideoOutput {
   video: {
     url: string;
@@ -153,6 +174,14 @@ export const VIDEO_MODEL_OPTIONS = {
     speed: 'Lento',
     quality: 'Muy Alta',
     endpoint: 'fal-ai/kling-video/v2.1/standard/image-to-video'
+  },
+  'ltxv': {
+    name: 'LTXV-13B Distilled',
+    description: 'Modelo ultra avanzado con máximo control',
+    icon: '🚀',
+    speed: 'Muy Lento',
+    quality: 'Excepcional',
+    endpoint: 'fal-ai/ltxv-13b-098-distilled/image-to-video'
   }
 } as const;
 
@@ -361,6 +390,30 @@ const getVideoModelConfig = (modelType: VideoModelType, imageUrl: string, prompt
           cfg_scale: options.cfg_scale || 0.5,
           ...options
         } as KlingVideoInput
+      };
+    case 'ltxv':
+      return {
+        endpoint: VIDEO_MODEL_OPTIONS.ltxv.endpoint,
+        input: {
+          prompt,
+          image_url: imageUrl,
+          negative_prompt: options.negative_prompt || "worst quality, inconsistent motion, blurry, jittery, distorted",
+          resolution: options.resolution || "720p",
+          aspect_ratio: options.aspect_ratio || "auto",
+          num_frames: options.num_frames || 121,
+          first_pass_num_inference_steps: options.first_pass_num_inference_steps || 8,
+          second_pass_num_inference_steps: options.second_pass_num_inference_steps || 8,
+          second_pass_skip_initial_steps: options.second_pass_skip_initial_steps || 5,
+          frame_rate: options.frame_rate || 24,
+          expand_prompt: options.expand_prompt || false,
+          reverse_video: options.reverse_video || false,
+          enable_safety_checker: options.enable_safety_checker !== false,
+          enable_detail_pass: options.enable_detail_pass || false,
+          temporal_adain_factor: options.temporal_adain_factor || 0.5,
+          tone_map_compression_ratio: options.tone_map_compression_ratio || 0,
+          constant_rate_factor: options.constant_rate_factor || 29,
+          ...options
+        } as LTXVVideoInput
       };
     default:
       throw new Error(`Unsupported video model type: ${modelType}`);

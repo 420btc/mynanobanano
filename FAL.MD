@@ -1,5 +1,5 @@
 About
-Kling 2.1 (std) Image to Video API.
+Generate a video from a prompt and an image.
 
 1. Calling the API
 #
@@ -26,10 +26,10 @@ The client API handles the API submit protocol. It will handle the request statu
 
 import { fal } from "@fal-ai/client";
 
-const result = await fal.subscribe("fal-ai/kling-video/v2.1/standard/image-to-video", {
+const result = await fal.subscribe("fal-ai/ltxv-13b-098-distilled/image-to-video", {
   input: {
-    prompt: "As the sun dips below the horizon, painting the sky in fiery hues of orange and purple, powerful waves relentlessly crash against jagged, dark rocks, their white foam a stark contrast to the deepening twilight; the textured surface of the rocks, wet and glistening, reflects the vibrant colors, creating a mesmerizing spectacle of nature's raw power and breathtaking beauty",
-    image_url: "https://v3.fal.media/files/tiger/2r5c2GU4HI7dvCrnzRiKK_output.png"
+    prompt: "The astronaut gets up and walks away",
+    image_url: "https://storage.googleapis.com/falserverless/example_inputs/ltxv-image-input.jpg"
   },
   logs: true,
   onQueueUpdate: (update) => {
@@ -68,10 +68,10 @@ The client API provides a convenient way to submit requests to the model.
 
 import { fal } from "@fal-ai/client";
 
-const { request_id } = await fal.queue.submit("fal-ai/kling-video/v2.1/standard/image-to-video", {
+const { request_id } = await fal.queue.submit("fal-ai/ltxv-13b-098-distilled/image-to-video", {
   input: {
-    prompt: "As the sun dips below the horizon, painting the sky in fiery hues of orange and purple, powerful waves relentlessly crash against jagged, dark rocks, their white foam a stark contrast to the deepening twilight; the textured surface of the rocks, wet and glistening, reflects the vibrant colors, creating a mesmerizing spectacle of nature's raw power and breathtaking beauty",
-    image_url: "https://v3.fal.media/files/tiger/2r5c2GU4HI7dvCrnzRiKK_output.png"
+    prompt: "The astronaut gets up and walks away",
+    image_url: "https://storage.googleapis.com/falserverless/example_inputs/ltxv-image-input.jpg"
   },
   webhookUrl: "https://optional.webhook.url/for/results",
 });
@@ -82,7 +82,7 @@ You can fetch the status of a request to check if it is completed or still in pr
 
 import { fal } from "@fal-ai/client";
 
-const status = await fal.queue.status("fal-ai/kling-video/v2.1/standard/image-to-video", {
+const status = await fal.queue.status("fal-ai/ltxv-13b-098-distilled/image-to-video", {
   requestId: "764cabcf-b745-4b3e-ae38-1200304cf45b",
   logs: true,
 });
@@ -93,7 +93,7 @@ Once the request is completed, you can fetch the result. See the Output Schema f
 
 import { fal } from "@fal-ai/client";
 
-const result = await fal.queue.result("fal-ai/kling-video/v2.1/standard/image-to-video", {
+const result = await fal.queue.result("fal-ai/ltxv-13b-098-distilled/image-to-video", {
   requestId: "764cabcf-b745-4b3e-ae38-1200304cf45b"
 });
 console.log(result.data);
@@ -129,127 +129,107 @@ Read more about file handling in our file upload guide.
 Input
 #
 prompt string
-image_url string
-URL of the image to be used for the video
-
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
+Text prompt to guide generation
 
 negative_prompt string
-Default value: "blur, distort, and low quality"
+Negative prompt for generation Default value: "worst quality, inconsistent motion, blurry, jittery, distorted"
 
-cfg_scale float
-The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt. Default value: 0.5
+loras list<LoRAWeight>
+LoRA weights to use for generation
+
+resolution ResolutionEnum
+Resolution of the generated video. Default value: "720p"
+
+Possible enum values: 480p, 720p
+
+aspect_ratio AspectRatioEnum
+The aspect ratio of the video. Default value: "auto"
+
+Possible enum values: 9:16, 1:1, 16:9, auto
+
+seed integer
+Random seed for generation
+
+num_frames integer
+The number of frames in the video. Default value: 121
+
+first_pass_num_inference_steps integer
+Number of inference steps during the first pass. Default value: 8
+
+second_pass_num_inference_steps integer
+Number of inference steps during the second pass. Default value: 8
+
+second_pass_skip_initial_steps integer
+The number of inference steps to skip in the initial steps of the second pass. By skipping some steps at the beginning, the second pass can focus on smaller details instead of larger changes. Default value: 5
+
+frame_rate integer
+The frame rate of the video. Default value: 24
+
+expand_prompt boolean
+Whether to expand the prompt using a language model.
+
+reverse_video boolean
+Whether to reverse the video.
+
+enable_safety_checker boolean
+Whether to enable the safety checker. Default value: true
+
+enable_detail_pass boolean
+Whether to use a detail pass. If True, the model will perform a second pass to refine the video and enhance details. This incurs a 2.0x cost multiplier on the base price.
+
+temporal_adain_factor float
+The factor for adaptive instance normalization (AdaIN) applied to generated video chunks after the first. This can help deal with a gradual increase in saturation/contrast in the generated video by normalizing the color distribution across the video. A high value will ensure the color distribution is more consistent across the video, while a low value will allow for more variation in color distribution. Default value: 0.5
+
+tone_map_compression_ratio float
+The compression ratio for tone mapping. This is used to compress the dynamic range of the video to improve visual quality. A value of 0.0 means no compression, while a value of 1.0 means maximum compression.
+
+constant_rate_factor integer
+The constant rate factor (CRF) to compress input media with. Compressed input media more closely matches the model's training data, which can improve motion quality. Default value: 29
+
+image_url string
+Image URL for Image-to-Video task
 
 
 {
-  "prompt": "As the sun dips below the horizon, painting the sky in fiery hues of orange and purple, powerful waves relentlessly crash against jagged, dark rocks, their white foam a stark contrast to the deepening twilight; the textured surface of the rocks, wet and glistening, reflects the vibrant colors, creating a mesmerizing spectacle of nature's raw power and breathtaking beauty",
-  "image_url": "https://v3.fal.media/files/tiger/2r5c2GU4HI7dvCrnzRiKK_output.png",
-  "duration": "5",
-  "negative_prompt": "blur, distort, and low quality",
-  "cfg_scale": 0.5
+  "prompt": "The astronaut gets up and walks away",
+  "negative_prompt": "worst quality, inconsistent motion, blurry, jittery, distorted",
+  "loras": [],
+  "resolution": "720p",
+  "aspect_ratio": "auto",
+  "num_frames": 121,
+  "first_pass_num_inference_steps": 8,
+  "second_pass_num_inference_steps": 8,
+  "second_pass_skip_initial_steps": 5,
+  "frame_rate": 24,
+  "expand_prompt": false,
+  "reverse_video": false,
+  "enable_safety_checker": true,
+  "enable_detail_pass": false,
+  "temporal_adain_factor": 0.5,
+  "tone_map_compression_ratio": 0,
+  "constant_rate_factor": 29,
+  "image_url": "https://storage.googleapis.com/falserverless/example_inputs/ltxv-image-input.jpg"
 }
 Output
 #
 video File
-The generated video
+The generated video file.
+
+prompt string
+The prompt used for generation.
+
+seed integer
+The seed used for generation.
 
 
 {
   "video": {
-    "url": "https://v3.fal.media/files/koala/17e3xh08J4_PkHS_0cbwF_output.mp4"
-  }
+    "url": "https://storage.googleapis.com/falserverless/example_outputs/ltxv-image-to-video-output.mp4"
+  },
+  "prompt": "The astronaut gets up and walks away"
 }
 Other types
 #
-ImageToVideoV2MasterRequest
-#
-prompt string
-image_url string
-URL of the image to be used for the video
-
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
-
-negative_prompt string
-Default value: "blur, distort, and low quality"
-
-cfg_scale float
-The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt. Default value: 0.5
-
-TextToVideoV21MasterRequest
-#
-prompt string
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
-
-aspect_ratio AspectRatioEnum
-The aspect ratio of the generated video frame Default value: "16:9"
-
-Possible enum values: 16:9, 9:16, 1:1
-
-negative_prompt string
-Default value: "blur, distort, and low quality"
-
-cfg_scale float
-The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt. Default value: 0.5
-
-ProImageToVideoRequest
-#
-prompt string
-image_url string
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
-
-aspect_ratio AspectRatioEnum
-The aspect ratio of the generated video frame Default value: "16:9"
-
-Possible enum values: 16:9, 9:16, 1:1
-
-tail_image_url string
-URL of the image to be used for the end of the video
-
-negative_prompt string
-Default value: "blur, distort, and low quality"
-
-cfg_scale float
-The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt. Default value: 0.5
-
-V1TextToVideoRequest
-#
-prompt string
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
-
-aspect_ratio AspectRatioEnum
-The aspect ratio of the generated video frame Default value: "16:9"
-
-Possible enum values: 16:9, 9:16, 1:1
-
-negative_prompt string
-Default value: "blur, distort, and low quality"
-
-cfg_scale float
-The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt. Default value: 0.5
-
-camera_control CameraControlEnum
-Camera control parameters
-
-Possible enum values: down_back, forward_up, right_turn_forward, left_turn_forward
-
-advanced_camera_control CameraControl
-Advanced Camera control parameters
-
 File
 #
 url string
@@ -267,211 +247,15 @@ The size of the file in bytes.
 file_data string
 File data
 
-ImageToVideoRequest
+LoRAWeight
 #
-prompt string
-image_url string
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
+path string
+URL or path to the LoRA weights.
 
-Possible enum values: 5, 10
+weight_name string
+Name of the LoRA weight. Only used if path is a HuggingFace repository, and is only required when the repository contains multiple LoRA weights.
 
-negative_prompt string
-Default value: "blur, distort, and low quality"
-
-cfg_scale float
-The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt. Default value: 0.5
-
-LipsyncA2VRequest
-#
-video_url string
-The URL of the video to generate the lip sync for. Supports .mp4/.mov, ≤100MB, 2–10s, 720p/1080p only, width/height 720–1920px. If validation fails, an error is returned.
-
-audio_url string
-The URL of the audio to generate the lip sync for.
-
-ImageToVideoV21MasterRequest
-#
-prompt string
-image_url string
-URL of the image to be used for the video
-
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
-
-negative_prompt string
-Default value: "blur, distort, and low quality"
-
-cfg_scale float
-The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt. Default value: 0.5
-
-CameraControl
-#
-movement_type MovementTypeEnum
-The type of camera movement
-
-Possible enum values: horizontal, vertical, pan, tilt, roll, zoom
-
-movement_value integer
-The value of the camera movement
-
-ImageToVideoV21ProRequest
-#
-prompt string
-image_url string
-URL of the image to be used for the video
-
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
-
-negative_prompt string
-Default value: "blur, distort, and low quality"
-
-cfg_scale float
-The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt. Default value: 0.5
-
-tail_image_url string
-URL of the image to be used for the end of the video
-
-TextToVideoRequest
-#
-prompt string
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
-
-aspect_ratio AspectRatioEnum
-The aspect ratio of the generated video frame Default value: "16:9"
-
-Possible enum values: 16:9, 9:16, 1:1
-
-negative_prompt string
-Default value: "blur, distort, and low quality"
-
-cfg_scale float
-The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt. Default value: 0.5
-
-LipsyncT2VRequest
-#
-video_url string
-The URL of the video to generate the lip sync for. Supports .mp4/.mov, ≤100MB, 2–10s, 720p/1080p only, width/height 720–1920px. If validation fails, an error is returned.
-
-text string
-Text content for lip-sync video generation. Max 120 characters.
-
-voice_id VoiceIdEnum
-Voice ID to use for speech synthesis
-
-Possible enum values: genshin_vindi2, zhinen_xuesheng, AOT, ai_shatang, genshin_klee2, genshin_kirara, ai_kaiya, oversea_male1, ai_chenjiahao_712, girlfriend_4_speech02, chat1_female_new-3, chat_0407_5-1, cartoon-boy-07, uk_boy1, cartoon-girl-01, PeppaPig_platform, ai_huangzhong_712, ai_huangyaoshi_712, ai_laoguowang_712, chengshu_jiejie, you_pingjing, calm_story1, uk_man2, laopopo_speech02, heainainai_speech02, reader_en_m-v1, commercial_lady_en_f-v1, tiyuxi_xuedi, tiexin_nanyou, girlfriend_1_speech02, girlfriend_2_speech02, zhuxi_speech02, uk_oldman3, dongbeilaotie_speech02, chongqingxiaohuo_speech02, chuanmeizi_speech02, chaoshandashu_speech02, ai_taiwan_man2_speech02, xianzhanggui_speech02, tianjinjiejie_speech02, diyinnansang_DB_CN_M_04-v2, yizhipiannan-v1, guanxiaofang-v2, tianmeixuemei-v1, daopianyansang-v1, mengwa-v1
-
-voice_language VoiceLanguageEnum
-The voice language corresponding to the Voice ID Default value: "en"
-
-Possible enum values: zh, en
-
-voice_speed float
-Speech rate for Text to Video generation Default value: 1
-
-DynamicMask
-#
-mask_url string
-URL of the image for Dynamic Brush Application Area (Mask image created by users using the motion brush)
-
-trajectories list<Trajectory>
-List of trajectories
-
-V1ImageToVideoRequest
-#
-prompt string
-The prompt for the video
-
-image_url string
-URL of the image to be used for the video
-
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
-
-negative_prompt string
-Default value: "blur, distort, and low quality"
-
-cfg_scale float
-The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt. Default value: 0.5
-
-tail_image_url string
-URL of the image to be used for the end of the video
-
-static_mask_url string
-URL of the image for Static Brush Application Area (Mask image created by users using the motion brush)
-
-dynamic_masks list<DynamicMask>
-List of dynamic masks
-
-VideoEffectsRequest
-#
-input_image_urls list<string>
-URL of images to be used for hug, kiss or heart_gesture video.
-
-effect_scene EffectSceneEnum
-The effect scene to use for the video generation
-
-Possible enum values: hug, kiss, heart_gesture, squish, expansion, fuzzyfuzzy, bloombloom, dizzydizzy, jelly_press, jelly_slice, jelly_squish, jelly_jiggle, pixelpixel, yearbook, instant_film, anime_figure, rocketrocket
-
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
-
-MultiImageToVideoRequest
-#
-prompt string
-input_image_urls list<string>
-List of image URLs to use for video generation. Supports up to 4 images.
-
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
-
-aspect_ratio AspectRatioEnum
-The aspect ratio of the generated video frame Default value: "16:9"
-
-Possible enum values: 16:9, 9:16, 1:1
-
-negative_prompt string
-Default value: "blur, distort, and low quality"
-
-TextToVideoV2MasterRequest
-#
-prompt string
-duration DurationEnum
-The duration of the generated video in seconds Default value: "5"
-
-Possible enum values: 5, 10
-
-aspect_ratio AspectRatioEnum
-The aspect ratio of the generated video frame Default value: "16:9"
-
-Possible enum values: 16:9, 9:16, 1:1
-
-negative_prompt string
-Default value: "blur, distort, and low quality"
-
-cfg_scale float
-The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt. Default value: 0.5
-
-Trajectory
-#
-x integer
-X coordinate of the motion trajectory
-
-y integer
-Y coordinate of the motion trajectory
+scale float
+Scale of the LoRA weight. This is a multiplier applied to the LoRA weight when loading it. Default value: 1
 
 Related Models
