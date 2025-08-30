@@ -1,12 +1,15 @@
-# 🍌 Banana World v0.2 By carlosfr.es
+# 🍌 Banana World v0.3 By carlosfr.es
 
-Una aplicación web interactiva para generar y manipular arte isométrico usando Nano Banana de Google. Crea mundos únicos con sprites de pixel art 3D y edificios arquitectónicos en perspectiva isométrica.
+Una aplicación web interactiva para generar y manipular arte isométrico usando IA avanzada. Crea mundos únicos con múltiples estilos artísticos, modelos 3D interactivos y videos animados con inteligencia artificial.
 
 ## ✨ Características Principales
 
 ### 🎮 Modos de Juego
-- **Pixel Art**: Genera sprites 3D en estilo pixel art isométrico
-- **Constructor**: Crea edificios y estructuras arquitectónicas 2D isométricas
+- **Pixel Art** 🎮: Genera sprites 3D en estilo pixel art isométrico clásico
+- **Constructor** 🏗️: Crea edificios y estructuras arquitectónicas 2D isométricas
+- **Anime HD** 🎌: Arte anime isométrico ultra definido con colores vibrantes
+- **Sticker 3D** 🏷️: Pegatinas 3D profesionales para logotipos y diseño
+- **Escena Completa** 🖼️: Recrea imágenes completas en pixel art isométrico
 
 ### 🎨 Generación de Assets
 - **Desde Texto**: Describe lo que quieres crear y la IA lo genera
@@ -19,6 +22,17 @@ Una aplicación web interactiva para generar y manipular arte isométrico usando
 - **Duplicación**: Crea copias de tus assets favoritos
 - **Descarga Individual**: Exporta assets como PNG transparentes
 - **Información Detallada**: Ve metadatos de generación y tiempos
+
+### 🎬 Generación 3D y Video
+- **Modelos 3D**: Convierte assets 2D a modelos 3D interactivos
+  - **Hunyuan Normal** 🏆: Modelo completo con GLB, PBR y MESH (alta calidad)
+  - **Hunyuan Turbo** ⚡: Modelo rápido, solo GLB (velocidad optimizada)
+  - **Trellis** 🔬: Modelo avanzado de Microsoft (muy alta calidad)
+- **Visualización 3D**: Visor interactivo con rotación, zoom y controles
+- **Descarga 3D**: Múltiples formatos (GLB, PBR, MESH) según el modelo
+- **Videos Animados**: Genera videos MP4 desde imágenes con prompts de movimiento
+- **Reproductor Integrado**: Visualiza videos con controles completos
+- **Descarga de Video**: Exporta videos en formato MP4
 
 ### 🎯 Interacción Intuitiva
 - **Arrastrar y Soltar**: Mueve assets libremente por el canvas
@@ -36,6 +50,7 @@ Una aplicación web interactiva para generar y manipular arte isométrico usando
 - Node.js (versión 16 o superior)
 - npm o yarn
 - API Key de Google Gemini
+- API Key de Fal AI (para funcionalidades 3D y video)
 
 ### Instalación Local
 
@@ -54,6 +69,7 @@ npm install
 Crea un archivo `.env.local` en la raíz del proyecto:
 ```env
 GEMINI_API_KEY=tu_api_key_de_gemini
+VITE_FAL_API_KEY=tu_api_key_de_fal_ai
 VITE_APP_PASSWORD=tu_contraseña_personalizada
 ```
 
@@ -70,6 +86,7 @@ Ve a `http://localhost:5173`
 1. **Conecta tu repositorio** a Vercel
 2. **Configura las variables de entorno** en Vercel:
    - `GEMINI_API_KEY`: Tu API key de Google Gemini
+   - `VITE_FAL_API_KEY`: Tu API key de Fal AI
    - `VITE_APP_PASSWORD`: Contraseña de acceso a la aplicación
 3. **Despliega** automáticamente
 
@@ -93,6 +110,24 @@ Ve a `http://localhost:5173`
 3. **Desde imagen**: Sube una foto de un edificio real
 4. La IA creará una representación isométrica 2D arquitectónica
 
+#### Modo Anime HD 🎌
+1. Selecciona "Anime HD" en el selector de modo
+2. **Desde texto**: Describe personajes o escenas anime (ej: "guerrero samurai", "mago con bastón")
+3. **Desde imagen**: Convierte fotos al estilo anime isométrico
+4. Obtén arte anime ultra definido con colores vibrantes
+
+#### Modo Sticker 3D 🏷️
+1. Selecciona "Sticker 3D" en el selector de modo
+2. **Desde texto**: Describe elementos para logos (ej: "logo de empresa", "mascota")
+3. **Desde imagen**: Convierte imágenes a stickers profesionales
+4. Perfecto para diseño de logotipos y branding
+
+#### Modo Escena Completa 🖼️
+1. Selecciona "Escena Completa" en el selector de modo
+2. **Desde imagen**: Sube cualquier imagen compleja
+3. La IA recreará toda la escena en pixel art isométrico
+4. Mantiene todos los elementos y detalles de la imagen original
+
 ### Manipulación de Assets
 
 1. **Seleccionar**: Haz clic en cualquier asset para seleccionarlo
@@ -104,6 +139,44 @@ Ve a `http://localhost:5173`
 7. **Descargar**: Exporta como PNG transparente
 8. **Ver Info**: Consulta metadatos de generación
 
+### Funcionalidades 3D
+
+#### Conversión a Modelos 3D
+1. **Selecciona un asset** generado en cualquier modo
+2. **Haz clic en el botón 3D** (🎮) en la barra de herramientas
+3. **Elige el modelo 3D** según tus necesidades:
+   - **Hunyuan Normal** 🏆: Máxima calidad, múltiples formatos (lento)
+   - **Hunyuan Turbo** ⚡: Velocidad optimizada, formato GLB (rápido)
+   - **Trellis** 🔬: Tecnología Microsoft, muy alta calidad (medio)
+4. **Espera la conversión** (tiempo varía según el modelo)
+5. **Visualiza el modelo 3D** en el visor interactivo
+
+#### Visor 3D Interactivo
+- **Rotación**: Arrastra para rotar el modelo en cualquier dirección
+- **Zoom**: Usa la rueda del mouse para acercar/alejar
+- **Controles**: Navegación intuitiva con mouse
+- **Descarga**: Botones para diferentes formatos según el modelo usado
+
+### Generación de Videos
+
+#### Crear Videos Animados
+1. **Selecciona un asset** generado
+2. **Haz clic en el botón Video** (🎬) en la barra de herramientas
+3. **Describe el movimiento** deseado en el prompt:
+   - "Un gato caminando lentamente en el jardín"
+   - "Una persona saludando con la mano"
+   - "Un objeto rotando suavemente"
+   - "Hojas cayendo del árbol"
+4. **Haz clic en "🎬 Generar Video"**
+5. **Espera la generación** (puede tomar varios minutos)
+6. **Visualiza el video** en el reproductor integrado
+
+#### Reproductor de Video
+- **Controles completos**: Play, pausa, volumen, tiempo
+- **Autoplay y loop**: Reproducción automática y continua
+- **Información del prompt**: Ve qué descripción se usó
+- **Descarga MP4**: Exporta el video generado
+
 ### Gestión del Canvas
 
 - **Reset**: Limpia todo el canvas (botón de reset)
@@ -114,7 +187,14 @@ Ve a `http://localhost:5173`
 
 - **Frontend**: React + TypeScript + Vite
 - **Estilos**: Tailwind CSS
-- **IA**: Google Gemini API para generación de imágenes
+- **IA Generativa**: 
+  - Google Gemini API para generación de imágenes
+  - Fal AI para modelos 3D y generación de video
+- **Modelos 3D**: 
+  - Hunyuan 3D (Normal y Turbo)
+  - Microsoft Trellis
+- **Video**: Fal AI Decart Lucy-5B para image-to-video
+- **Visualización 3D**: Model-viewer web component
 - **Audio**: Tone.js para feedback sonoro
 - **Analytics**: Vercel Analytics
 - **Despliegue**: Vercel
@@ -125,16 +205,21 @@ Ve a `http://localhost:5173`
 banana-world-v0.1/
 ├── src/
 │   ├── App.tsx              # Componente principal (copia)
+│   ├── public/
+│   │   ├── favi.png         # Favicon PNG
+│   │   └── favi.webp        # Favicon WebP
 │   └── services/
 │       └── geminiService.ts  # Integración con Gemini AI
 ├── App.tsx                   # Componente principal
 ├── index.tsx                 # Punto de entrada
 ├── index.html               # Template HTML
 ├── services/
-│   └── geminiService.ts     # Servicio de IA
+│   ├── geminiService.ts     # Servicio de IA para imágenes
+│   └── falService.ts        # Servicio de Fal AI (3D y video)
 ├── package.json             # Dependencias
 ├── vite.config.ts          # Configuración de Vite
 ├── tsconfig.json           # Configuración TypeScript
+├── FAL.MD                  # Documentación de Fal AI
 └── .env.local              # Variables de entorno (local)
 ```
 
@@ -165,6 +250,7 @@ banana-world-v0.1/
 ```env
 # Requeridas
 GEMINI_API_KEY=your_gemini_api_key_here
+VITE_FAL_API_KEY=your_fal_api_key_here
 VITE_APP_PASSWORD=your_access_password
 
 # Opcionales
@@ -185,7 +271,8 @@ VITE_MAX_IMAGES=50
 
 **Error de API Key**
 - Verifica que `GEMINI_API_KEY` esté configurada correctamente
-- Asegúrate de que la API key tenga permisos para Gemini
+- Asegúrate de que `VITE_FAL_API_KEY` esté configurada para funciones 3D/video
+- Confirma que las API keys tengan permisos y créditos suficientes
 
 **Problemas de Carga**
 - Revisa la conexión a internet
