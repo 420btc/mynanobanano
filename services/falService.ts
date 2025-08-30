@@ -9,6 +9,7 @@ if (import.meta.env.VITE_FAL_API_KEY) {
 
 // Model types
 export type Model3DType = 'hunyuan-normal' | 'hunyuan-turbo' | 'trellis';
+export type VideoModelType = 'lucy' | 'minimax' | 'kling';
 
 // Base input interface
 export interface Base3DInput {
@@ -87,6 +88,21 @@ export interface VideoInput {
   sync_mode?: boolean;
 }
 
+export interface MinimaxVideoInput {
+  prompt: string;
+  image_url: string;
+  duration?: "6" | "10";
+  prompt_optimizer?: boolean;
+}
+
+export interface KlingVideoInput {
+  prompt: string;
+  image_url: string;
+  duration?: "5" | "10";
+  negative_prompt?: string;
+  cfg_scale?: number;
+}
+
 export interface VideoOutput {
   video: {
     url: string;
@@ -99,6 +115,7 @@ export interface VideoOutput {
 export interface VideoResult {
   data: VideoOutput;
   requestId: string;
+  modelType?: VideoModelType;
 }
 
 // Union types
@@ -110,6 +127,34 @@ export interface Model3DResult {
   requestId: string;
   modelType: Model3DType;
 }
+
+// Video model configuration
+export const VIDEO_MODEL_OPTIONS = {
+  'lucy': {
+    name: 'Decart Lucy-5B',
+    description: 'Modelo rápido y eficiente para video',
+    icon: '⚡',
+    speed: 'Rápido',
+    quality: 'Media',
+    endpoint: 'fal-ai/decart/lucy-5b/image-to-video'
+  },
+  'minimax': {
+    name: 'MiniMax Hailuo-02',
+    description: 'Modelo avanzado 512p con alta calidad',
+    icon: '🎬',
+    speed: 'Medio',
+    quality: 'Alta',
+    endpoint: 'fal-ai/minimax/hailuo-02-fast/image-to-video'
+  },
+  'kling': {
+    name: 'Kling 2.1 Standard',
+    description: 'Modelo profesional con control avanzado',
+    icon: '🎭',
+    speed: 'Lento',
+    quality: 'Muy Alta',
+    endpoint: 'fal-ai/kling-video/v2.1/standard/image-to-video'
+  }
+} as const;
 
 /**
  * Get model endpoint and prepare input based on model type
@@ -280,37 +325,79 @@ export const convertImageElementTo3D = async (
 };
 
 /**
+ * Get video model configuration
+ */
+const getVideoModelConfig = (modelType: VideoModelType, imageUrl: string, prompt: string, options: any = {}) => {
+  switch (modelType) {
+    case 'lucy':
+      return {
+        endpoint: VIDEO_MODEL_OPTIONS.lucy.endpoint,
+        input: {
+          prompt,
+          image_url: imageUrl,
+          sync_mode: options.sync_mode !== false,
+          ...options
+        } as VideoInput
+      };
+    case 'minimax':
+      return {
+        endpoint: VIDEO_MODEL_OPTIONS.minimax.endpoint,
+        input: {
+          prompt,
+          image_url: imageUrl,
+          duration: options.duration || "6",
+          prompt_optimizer: options.prompt_optimizer !== false,
+          ...options
+        } as MinimaxVideoInput
+      };
+    case 'kling':
+      return {
+        endpoint: VIDEO_MODEL_OPTIONS.kling.endpoint,
+        input: {
+          prompt,
+          image_url: imageUrl,
+          duration: options.duration || "5",
+          negative_prompt: options.negative_prompt || "blur, distort, and low quality",
+          cfg_scale: options.cfg_scale || 0.5,
+          ...options
+        } as KlingVideoInput
+      };
+    default:
+      throw new Error(`Unsupported video model type: ${modelType}`);
+  }
+};
+
+/**
  * Convert an image to video using AI video generation
  * @param imageUrl - URL of the image to use as first frame
  * @param prompt - Text description of the desired video content
+ * @param modelType - Type of video model to use
  * @param options - Optional parameters for the conversion
  * @returns Promise with the video data
  */
 export const convertImageToVideo = async (
   imageUrl: string,
   prompt: string,
-  options: Partial<VideoInput> = {}
+  modelType: VideoModelType = 'lucy',
+  options: any = {}
 ): Promise<VideoResult> => {
   if (!import.meta.env.VITE_FAL_API_KEY) {
     throw new Error("VITE_FAL_API_KEY environment variable not set. Please ensure it's configured in your .env.local file.");
   }
 
-  const input: VideoInput = {
-    prompt,
-    image_url: imageUrl,
-    sync_mode: options.sync_mode !== false,
-    ...options
-  };
+  const { endpoint, input } = getVideoModelConfig(modelType, imageUrl, prompt, options);
 
   // Debug logging
   console.log('🎬 Converting to video with:', {
+    modelType,
+    endpoint,
     prompt,
     imageUrl,
     inputKeys: Object.keys(input)
   });
 
   try {
-    const result = await fal.subscribe("fal-ai/decart/lucy-5b/image-to-video", {
+    const result = await fal.subscribe(endpoint, {
       input,
       logs: true,
       onQueueUpdate: (update) => {
@@ -320,7 +407,10 @@ export const convertImageToVideo = async (
       },
     });
 
-    return result as VideoResult;
+    return {
+      ...result,
+      modelType
+    } as VideoResult;
   } catch (error) {
     console.error("Error converting image to video:", error);
     throw new Error(`Failed to convert image to video: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -332,6 +422,7 @@ export const convertImageToVideo = async (
  * @param imageElement - HTML image element
  * @param prompt - Text description of the desired video content
  * @param fileName - Name for the temporary file
+ * @param modelType - Type of video model to use
  * @param options - Optional parameters for the conversion
  * @returns Promise with the video data
  */
@@ -339,7 +430,8 @@ export const convertImageElementToVideo = async (
   imageElement: HTMLImageElement,
   prompt: string,
   fileName: string = 'image.png',
-  options: Partial<VideoInput> = {}
+  modelType: VideoModelType = 'lucy',
+  options: any = {}
 ): Promise<VideoResult> => {
   // Convert image element to canvas and then to file
   const canvas = document.createElement('canvas');
@@ -359,7 +451,7 @@ export const convertImageElementToVideo = async (
   const uploadedUrl = await uploadFileToFal(file);
   
   // Convert to video
-  return convertImageToVideo(uploadedUrl, prompt, options);
+  return convertImageToVideo(uploadedUrl, prompt, modelType, options);
 };
 
 /**

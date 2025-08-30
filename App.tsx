@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import * as Tone from 'tone';
 import { Analytics } from '@vercel/analytics/react';
 import { generateImageWithPrompt, generateImageWithMultiplePrompts, generateImageFromText, getRemixSuggestions } from './services/geminiService';
-import { convertImageElementTo3D, downloadFile, Model3DType, convertImageElementToVideo, VideoResult } from './services/falService';
+import { convertImageElementTo3D, downloadFile, Model3DType, convertImageElementToVideo, VideoResult, VideoModelType, VIDEO_MODEL_OPTIONS } from './services/falService';
 
 // --- SOUND DEFINITIONS ---
 const synth = new Tone.Synth({
@@ -172,6 +172,7 @@ interface ProcessedImage {
     isGenerating: boolean;
     error?: string;
     prompt?: string;
+    modelType?: VideoModelType;
   };
 }
 
@@ -340,6 +341,8 @@ const App: React.FC = () => {
   const [videoPromptInput, setVideoPromptInput] = useState('');
   const [showVideoViewer, setShowVideoViewer] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<{ videoUrl: string; prompt?: string } | null>(null);
+  const [showVideoModelSelector, setShowVideoModelSelector] = useState(false);
+  const [selectedVideoModelType, setSelectedVideoModelType] = useState<VideoModelType>('lucy');
 
   const selectedImage = useMemo(() =>
     selectedImageId !== null ? images.find(img => img.id === selectedImageId) : null,
@@ -1482,7 +1485,7 @@ const handleConvertToVideo = async (prompt: string) => {
         // Mark as generating video
         setImages(prev => prev.map(img => 
             img.id === selectedImageId 
-                ? { ...img, video: { videoUrl: '', isGenerating: true, prompt } }
+                ? { ...img, video: { videoUrl: '', isGenerating: true, prompt, modelType: selectedVideoModelType } }
                 : img
         ));
         
@@ -1490,7 +1493,8 @@ const handleConvertToVideo = async (prompt: string) => {
         const result = await convertImageElementToVideo(
             selectedImage.processedImage,
             prompt,
-            `asset_${selectedImage.id}.png`
+            `asset_${selectedImage.id}.png`,
+            selectedVideoModelType
         );
         
         console.log('✅ Video conversion completed:', {
@@ -1506,7 +1510,8 @@ const handleConvertToVideo = async (prompt: string) => {
                     video: {
                         videoUrl: result.data.video.url,
                         isGenerating: false,
-                        prompt
+                        prompt,
+                        modelType: selectedVideoModelType
                     }
                 }
                 : img
@@ -1528,7 +1533,8 @@ const handleConvertToVideo = async (prompt: string) => {
                         videoUrl: '',
                         isGenerating: false,
                         error: error instanceof Error ? error.message : 'Error desconocido',
-                        prompt
+                        prompt,
+                        modelType: selectedVideoModelType
                     }
                 }
                 : img
@@ -2181,7 +2187,7 @@ const handleDownloadVideo = () => {
                         )}
                     </button>
                     <button
-                        onClick={selectedImage.video?.videoUrl ? handleViewVideo : () => setShowVideoPrompt(true)}
+                        onClick={selectedImage.video?.videoUrl ? handleViewVideo : () => setShowVideoModelSelector(true)}
                         disabled={isActionDisabled || selectedImage.video?.isGenerating}
                         className="h-10 w-10 p-2 box-border text-black disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors hover:bg-gray-100 border-r border-black relative"
                         aria-label={selectedImage.video?.videoUrl ? "View video" : "Create video"}
@@ -2393,6 +2399,60 @@ const handleDownloadVideo = () => {
                     <div className="p-4 border-t border-gray-200 bg-gray-50">
                         <p className="text-xs font-mono text-gray-600 text-center">
                             Modelo actual: <span className="font-bold">{MODEL_3D_OPTIONS[selectedModelType].name}</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Video Model Selector Modal */}
+        {showVideoModelSelector && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setShowVideoModelSelector(false)}>
+                <div className="bg-white border border-black shadow-lg max-w-md w-full mx-4 flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-black">
+                        <h3 className="font-mono text-lg font-bold text-black">Seleccionar Modelo de Video</h3>
+                        <button 
+                            onClick={() => setShowVideoModelSelector(false)}
+                            className="text-gray-500 hover:text-black transition-colors"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    
+                    {/* Model Options */}
+                    <div className="p-4 space-y-3">
+                        {Object.entries(VIDEO_MODEL_OPTIONS).map(([key, model]) => (
+                            <button
+                                key={key}
+                                onClick={() => {
+                                    setSelectedVideoModelType(key as VideoModelType);
+                                    setShowVideoModelSelector(false);
+                                    setShowVideoPrompt(true);
+                                }}
+                                className={`w-full p-4 border border-black text-left hover:bg-gray-50 transition-colors ${
+                                    selectedVideoModelType === key ? 'bg-gray-100' : 'bg-white'
+                                }`}
+                            >
+                                <div className="flex items-start gap-3">
+                                    <span className="text-2xl">{model.icon}</span>
+                                    <div className="flex-1">
+                                        <div className="font-bold text-black">{model.name}</div>
+                                        <div className="text-sm text-gray-600 mt-1">{model.description}</div>
+                                        <div className="flex gap-4 mt-2 text-xs">
+                                            <span className="text-blue-600">Velocidad: {model.speed}</span>
+                                            <span className="text-green-600">Calidad: {model.quality}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                    
+                    {/* Current Selection */}
+                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                        <p className="text-xs font-mono text-gray-600 text-center">
+                            Modelo actual: <span className="font-bold">{VIDEO_MODEL_OPTIONS[selectedVideoModelType].name}</span>
                         </p>
                     </div>
                 </div>
