@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import * as Tone from 'tone';
 import { Analytics } from '@vercel/analytics/react';
 import { generateImageWithPrompt, generateImageWithMultiplePrompts, generateImageFromText, getRemixSuggestions } from './services/geminiService';
+import { convertImageElementTo3D, downloadFile } from './services/falService';
 
 // --- SOUND DEFINITIONS ---
 const synth = new Tone.Synth({
@@ -55,8 +56,16 @@ const STICKER_IMAGE_PROMPT = STICKER_PREFIX_IMAGE + STICKER_MAIN("the complete s
 const STICKER_TEXT_PROMPT_TEMPLATE = (input: string) => STICKER_MAIN(input) + STICKER_POSTFIX;
 const STICKER_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as a 3D perspective sticker design on transparent background. No drop shadow, professional logo quality.`;
 
+// Complete mode constants
+const COMPLETE_PREFIX_IMAGE = "Recreate this entire image as a complete isometric pixel art scene, including all elements, objects, characters, backgrounds, and details visible in the original image. ";
+const COMPLETE_POSTFIX = "in isometric perspective, 3D pixel art style, maintaining the complete composition and all visual elements on white background. No drop shadow, preserve all details and spatial relationships.";
+const COMPLETE_MAIN = (subject: string) => `Create a complete isometric pixel art recreation of ${subject} `;
+const COMPLETE_IMAGE_PROMPT = COMPLETE_PREFIX_IMAGE + COMPLETE_MAIN("the entire scene with all elements") + COMPLETE_POSTFIX;
+const COMPLETE_TEXT_PROMPT_TEMPLATE = (input: string) => COMPLETE_MAIN(input) + COMPLETE_POSTFIX;
+const COMPLETE_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as a complete isometric pixel art scene with all elements on white background. No drop shadow, maintain full composition.`;
+
 // Game modes
-type GameMode = 'pixel' | 'building' | 'anime' | 'sticker';
+type GameMode = 'pixel' | 'building' | 'anime' | 'sticker' | 'complete';
 const GAME_MODES = {
   pixel: {
     name: 'Pixel Art',
@@ -77,6 +86,11 @@ const GAME_MODES = {
     name: 'Sticker 3D',
     description: 'Pegatinas 3D para logotipos',
     icon: '🏷️'
+  },
+  complete: {
+    name: 'Escena Completa',
+    description: 'Recrea toda la imagen en pixel art isométrico',
+    icon: '🖼️'
   }
 } as const;
 
@@ -118,6 +132,12 @@ interface ProcessedImage {
   generationDuration?: number; // Duration in milliseconds
   // Scaling
   scale?: number; // Scale factor (1, 1.2, 1.5, 2)
+  // 3D Model properties
+  model3D?: {
+    meshUrl: string;
+    isGenerating: boolean;
+    error?: string;
+  };
 }
 
 interface ImageProcessingResult {
@@ -277,6 +297,8 @@ const App: React.FC = () => {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const [show3DViewer, setShow3DViewer] = useState(false);
+  const [selected3DModel, setSelected3DModel] = useState<{ meshUrl: string } | null>(null);
 
   const selectedImage = useMemo(() =>
     selectedImageId !== null ? images.find(img => img.id === selectedImageId) : null,
@@ -631,7 +653,7 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', resizeCanvas);
   }, [drawCanvas]);
 
-  const generateFromImage = useCallback(async (file: File, id: number, prompt?: string) => {
+  const generateFromImage = async (file: File, id: number, prompt?: string) => {
     // Use mode-specific prompt if none provided
     let defaultPrompt;
     if (gameMode === 'building') {
@@ -640,17 +662,12 @@ const App: React.FC = () => {
       defaultPrompt = ANIME_IMAGE_PROMPT;
     } else if (gameMode === 'sticker') {
       defaultPrompt = STICKER_IMAGE_PROMPT;
+    } else if (gameMode === 'complete') {
+      defaultPrompt = COMPLETE_IMAGE_PROMPT;
     } else {
       defaultPrompt = IMAGE_PROMPT;
     }
     const finalPrompt = prompt || defaultPrompt;
-    
-    // Temporary debug to verify correct prompt selection
-    console.log('🎯 STICKER MODE DEBUG:');
-    console.log('Current gameMode:', gameMode);
-    console.log('Selected prompt:', finalPrompt.substring(0, 80) + '...');
-    console.log('Is sticker mode?', gameMode === 'sticker');
-    
     const startTime = new Date();
     
     // Update the image with start time and prompt
@@ -717,9 +734,9 @@ const App: React.FC = () => {
       console.error(e);
       setImages(prev => prev.filter(img => img.id !== id));
     }
-  }, [gameMode]);
+  };
 
-  const generateFromText = useCallback(async (userInput: string, id: number) => {
+  const generateFromText = async (userInput: string, id: number) => {
     const startTime = new Date();
     let fullPrompt;
     if (gameMode === 'building') {
@@ -728,6 +745,8 @@ const App: React.FC = () => {
       fullPrompt = ANIME_TEXT_PROMPT_TEMPLATE(userInput);
     } else if (gameMode === 'sticker') {
       fullPrompt = STICKER_TEXT_PROMPT_TEMPLATE(userInput);
+    } else if (gameMode === 'complete') {
+      fullPrompt = COMPLETE_TEXT_PROMPT_TEMPLATE(userInput);
     } else {
       fullPrompt = TEXT_PROMPT_TEMPLATE(userInput);
     }
@@ -793,7 +812,7 @@ const App: React.FC = () => {
         console.error(e);
         setImages(prev => prev.filter(img => img.id !== id));
     }
-  }, [gameMode]);
+  };
   
   const addImageToCanvas = useCallback(async (file: File, customPosition?: { x: number; y: number }) => {
     await ensureAudioContext();
@@ -852,6 +871,8 @@ const App: React.FC = () => {
       `Analyze these ${files.length} images and create a single ultra-detailed anime isometric character combining their key elements. ${ANIME_POSTFIX}` :
       gameMode === 'sticker' ?
       `Analyze these ${files.length} images and create a single 3D perspective sticker design combining all visual elements. ${STICKER_POSTFIX}` :
+      gameMode === 'complete' ?
+      `Analyze these ${files.length} images and create a complete isometric pixel art scene combining all elements, objects, and details from each image. ${COMPLETE_POSTFIX}` :
       `Analyze these ${files.length} images and create a single 3D pixel art sprite combining their key elements. ${PROMPT_POSTFIX}`;
     
     // Update the image with start time and prompt
@@ -1269,6 +1290,85 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
             setRemixInput('');
         }
     }
+};
+
+const handleConvertTo3D = async () => {
+    if (isActionDisabled || !selectedImage?.processedImage) return;
+    
+    try {
+        await ensureAudioContext();
+        synth.triggerAttackRelease('A4', '8n');
+        
+        // Mark as generating 3D model
+        setImages(prev => prev.map(img => 
+            img.id === selectedImageId 
+                ? { ...img, model3D: { meshUrl: '', isGenerating: true } }
+                : img
+        ));
+        
+        // Convert image to 3D
+        const result = await convertImageElementTo3D(
+            selectedImage.processedImage,
+            `asset_${selectedImage.id}.png`,
+            { textured_mesh: true }
+        );
+        
+        // Update with 3D model data
+        setImages(prev => prev.map(img => 
+            img.id === selectedImageId 
+                ? { 
+                    ...img, 
+                    model3D: {
+                        meshUrl: result.data.model_mesh.url,
+                        isGenerating: false
+                    }
+                }
+                : img
+        ));
+        
+        // Play success sound
+        await ensureAudioContext();
+        synth.triggerAttackRelease('C6', '8n');
+        
+    } catch (error) {
+        console.error('Error converting to 3D:', error);
+        
+        // Update with error
+        setImages(prev => prev.map(img => 
+            img.id === selectedImageId 
+                ? { 
+                    ...img, 
+                    model3D: {
+                        meshUrl: '',
+                        isGenerating: false,
+                        error: error instanceof Error ? error.message : 'Error desconocido'
+                    }
+                }
+                : img
+        ));
+        
+        // Play error sound
+        await ensureAudioContext();
+        synth.triggerAttackRelease('F3', '8n');
+    }
+};
+
+const handleView3D = () => {
+    if (selectedImage?.model3D?.meshUrl) {
+        setSelected3DModel({
+            meshUrl: selectedImage.model3D.meshUrl
+        });
+        setShow3DViewer(true);
+    }
+};
+
+const handleDownload3D = () => {
+    if (!selectedImage?.model3D?.meshUrl) return;
+    
+    const url = selectedImage.model3D.meshUrl;
+    const fileName = `asset_${selectedImage.id}.glb`;
+    
+    downloadFile(url, fileName);
 };
 
   useEffect(() => {
@@ -1817,6 +1917,25 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     </button>
                     <button
+                        onClick={selectedImage.model3D?.meshUrl ? handleView3D : handleConvertTo3D}
+                        disabled={isActionDisabled || selectedImage.model3D?.isGenerating}
+                        className="h-10 w-10 p-2 box-border text-black disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors hover:bg-gray-100 border-r border-black relative"
+                        aria-label={selectedImage.model3D?.meshUrl ? "View 3D model" : "Convert to 3D"}
+                    >
+                        {selectedImage.model3D?.isGenerating ? (
+                            <div className="animate-spin">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-1 0v2.25a.75.75 0 0 1-1.5 0V3a9 9 0 1 0 9 9h-2.25a.75.75 0 0 1 0-1.5H21Z"/></svg>
+                            </div>
+                        ) : selectedImage.model3D?.meshUrl ? (
+                            <span className="text-xs font-bold">👁️</span>
+                        ) : (
+                            <span className="text-xs font-bold">3D</span>
+                        )}
+                        {selectedImage.model3D?.error && (
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full" title={selectedImage.model3D.error}></div>
+                        )}
+                    </button>
+                    <button
                         onClick={handleDeleteSelected}
                         disabled={isActionDisabled}
                         className="h-10 w-10 p-2 box-border text-black disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors hover:bg-gray-100"
@@ -1900,7 +2019,8 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
                         }}
                         placeholder={gameMode === 'building' ? 'Crear edificio (ej: casa, torre, castillo)...' : 
                                    gameMode === 'anime' ? 'Crear personaje anime (ej: ninja, mago, samurai)...' :
-                                   gameMode === 'sticker' ? 'Crear pegatina 3D (ej: logo, marca, diseño)...' : 'Create anything ...'}
+                                   gameMode === 'sticker' ? 'Crear pegatina 3D (ej: logo, marca, diseño)...' :
+                                   gameMode === 'complete' ? 'Crear escena completa (ej: paisaje, ciudad, bosque)...' : 'Create anything ...'}
                         className="w-full h-12 box-border pl-4 pr-12 py-3 border border-black bg-white/80 text-black text-sm placeholder-neutral-600 focus:outline-none"
                         aria-label="Prompt input"
                     />
@@ -1960,6 +2080,57 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
                 </button>
             </div>
         </div>
+
+        {/* 3D Viewer Modal */}
+        {show3DViewer && selected3DModel && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setShow3DViewer(false)}>
+                <div className="bg-white border border-black shadow-lg max-w-4xl max-h-[90vh] w-full mx-4 flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-black">
+                        <h3 className="font-mono text-lg font-bold text-black">Visor 3D</h3>
+                        <div className="flex items-center gap-2">
+                            {/* Download button */}
+                            <button
+                                onClick={handleDownload3D}
+                                className="px-3 py-1 border border-black text-black text-xs font-mono hover:bg-gray-100 transition-colors"
+                                title="Descargar modelo 3D"
+                            >
+                                Descargar GLB
+                            </button>
+                            <button 
+                                onClick={() => setShow3DViewer(false)}
+                                className="text-gray-500 hover:text-black transition-colors ml-2"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* 3D Viewer Content */}
+                    <div className="flex-1 p-4 flex items-center justify-center bg-gray-50">
+                        <div className="w-full h-96 bg-white border border-gray-200 rounded flex items-center justify-center">
+                            {/* Model Viewer Web Component */}
+                            <model-viewer
+                                src={selected3DModel.meshUrl}
+                                alt="3D Model"
+                                auto-rotate
+                                camera-controls
+                                style={{width: '100%', height: '100%'}}
+                                loading="eager"
+                            ></model-viewer>
+                        </div>
+                    </div>
+                    
+                    {/* Instructions */}
+                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                        <p className="text-xs font-mono text-gray-600 text-center">
+                            Usa el mouse para rotar, zoom y mover el modelo 3D. Haz clic en "Descargar GLB" para guardar el modelo.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        )}
+
         <Analytics />
       </div>
     </>
