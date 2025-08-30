@@ -31,7 +31,7 @@ const TEXT_PROMPT_TEMPLATE = (input: string) => PROMPT_MAIN(input) + PROMPT_POST
 const REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as 3d pixel art in isometric perspective, 8-bit sprite on white background. No drop shadow.`;
 const REMIX_SUGGESTION_PROMPT = `Here is some 3d pixel art. Come up with 5 brief prompts for ways to remix the key entity/object. e.g. "Make it [x]" or "Add a [x]" or some other alteration of the key entity/object. Do NOT suggest ways to alter the environment or background, that must stay a plain solid empty background. Only give alterations of the key entity/object itself. Prompts should be under 8 words.`;
 
-// Building mode prompts
+// Building mode constants
 const BUILDING_PREFIX_IMAGE = "Convert this building/structure into an isometric 2D representation. ";
 const BUILDING_POSTFIX = "in isometric perspective, architectural style, clean 2D building sprite on white background. No drop shadow, no people, no vehicles.";
 const BUILDING_MAIN = (subject: string) => `Create an isometric 2D building of ${subject} `;
@@ -39,8 +39,16 @@ const BUILDING_IMAGE_PROMPT = BUILDING_PREFIX_IMAGE + BUILDING_MAIN("this buildi
 const BUILDING_TEXT_PROMPT_TEMPLATE = (input: string) => BUILDING_MAIN(input) + BUILDING_POSTFIX;
 const BUILDING_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as an isometric 2D building on white background. No drop shadow, architectural style.`;
 
+// Anime mode constants
+const ANIME_PREFIX_IMAGE = "Convert this into a high-definition anime-style pixel art character. ";
+const ANIME_POSTFIX = "in ultra-detailed anime pixel art style, high resolution, vibrant colors, clean sprite on white background. No drop shadow, anime aesthetic with detailed shading.";
+const ANIME_MAIN = (subject: string) => `Create a high-definition anime pixel art of ${subject} `;
+const ANIME_IMAGE_PROMPT = ANIME_PREFIX_IMAGE + ANIME_MAIN("this character/object") + ANIME_POSTFIX;
+const ANIME_TEXT_PROMPT_TEMPLATE = (input: string) => ANIME_MAIN(input) + ANIME_POSTFIX;
+const ANIME_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as ultra-detailed anime pixel art on white background. No drop shadow, high-definition anime style.`;
+
 // Game modes
-type GameMode = 'pixel' | 'building';
+type GameMode = 'pixel' | 'building' | 'anime';
 const GAME_MODES = {
   pixel: {
     name: 'Pixel Art',
@@ -51,6 +59,11 @@ const GAME_MODES = {
     name: 'Constructor',
     description: 'Edificios isométricos 2D',
     icon: '🏗️'
+  },
+  anime: {
+    name: 'Anime HD',
+    description: 'Pixel art anime ultra definido',
+    icon: '🎌'
   }
 } as const;
 
@@ -534,7 +547,8 @@ const App: React.FC = () => {
 
   const generateFromImage = useCallback(async (file: File, id: number, prompt?: string) => {
     // Use mode-specific prompt if none provided
-    const defaultPrompt = gameMode === 'building' ? BUILDING_IMAGE_PROMPT : IMAGE_PROMPT;
+    const defaultPrompt = gameMode === 'building' ? BUILDING_IMAGE_PROMPT : 
+                         gameMode === 'anime' ? ANIME_IMAGE_PROMPT : IMAGE_PROMPT;
     const finalPrompt = prompt || defaultPrompt;
     const startTime = new Date();
     
@@ -600,7 +614,8 @@ const App: React.FC = () => {
 
   const generateFromText = useCallback(async (userInput: string, id: number) => {
     const startTime = new Date();
-    const fullPrompt = gameMode === 'building' ? BUILDING_TEXT_PROMPT_TEMPLATE(userInput) : TEXT_PROMPT_TEMPLATE(userInput);
+    const fullPrompt = gameMode === 'building' ? BUILDING_TEXT_PROMPT_TEMPLATE(userInput) : 
+                      gameMode === 'anime' ? ANIME_TEXT_PROMPT_TEMPLATE(userInput) : TEXT_PROMPT_TEMPLATE(userInput);
     
     // Update the image with start time and prompt
     setImages(prev => prev.map(img => 
@@ -712,6 +727,8 @@ const App: React.FC = () => {
     const startTime = new Date();
     const defaultPrompt = gameMode === 'building' ? 
       `Analyze these ${files.length} building/structure images and create a single isometric 2D architectural representation combining their key features. ${BUILDING_POSTFIX}` :
+      gameMode === 'anime' ?
+      `Analyze these ${files.length} images and create a single ultra-detailed anime pixel art character combining their key elements. ${ANIME_POSTFIX}` :
       `Analyze these ${files.length} images and create a single 3D pixel art sprite combining their key elements. ${PROMPT_POSTFIX}`;
     
     // Update the image with start time and prompt
@@ -1690,7 +1707,8 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
                                 handleTextSubmit(e);
                             }
                         }}
-                        placeholder={gameMode === 'building' ? 'Crear edificio (ej: casa, torre, castillo)...' : 'Create anything ...'}
+                        placeholder={gameMode === 'building' ? 'Crear edificio (ej: casa, torre, castillo)...' : 
+                                   gameMode === 'anime' ? 'Crear personaje anime (ej: ninja, mago, samurai)...' : 'Create anything ...'}
                         className="w-full h-12 box-border pl-4 pr-12 py-3 border border-black bg-white/80 text-black text-sm placeholder-neutral-600 focus:outline-none"
                         aria-label="Prompt input"
                     />
