@@ -47,8 +47,16 @@ const ANIME_IMAGE_PROMPT = ANIME_PREFIX_IMAGE + ANIME_MAIN("this character/objec
 const ANIME_TEXT_PROMPT_TEMPLATE = (input: string) => ANIME_MAIN(input) + ANIME_POSTFIX;
 const ANIME_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as ultra-detailed anime isometric art on white background. No drop shadow, high-definition anime style, isometric perspective.`;
 
+// Sticker mode constants
+const STICKER_PREFIX_IMAGE = "Convert this entire image into a high-quality 3D perspective sticker design. ";
+const STICKER_POSTFIX = "in 3D perspective style, vibrant colors, professional sticker design on transparent background. No drop shadow, clean edges, logo-ready quality, suitable for printing.";
+const STICKER_MAIN = (subject: string) => `Create a 3D perspective sticker design of ${subject} `;
+const STICKER_IMAGE_PROMPT = STICKER_PREFIX_IMAGE + STICKER_MAIN("the complete scene/image") + STICKER_POSTFIX;
+const STICKER_TEXT_PROMPT_TEMPLATE = (input: string) => STICKER_MAIN(input) + STICKER_POSTFIX;
+const STICKER_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as a 3D perspective sticker design on transparent background. No drop shadow, professional logo quality.`;
+
 // Game modes
-type GameMode = 'pixel' | 'building' | 'anime';
+type GameMode = 'pixel' | 'building' | 'anime' | 'sticker';
 const GAME_MODES = {
   pixel: {
     name: 'Pixel Art',
@@ -64,6 +72,11 @@ const GAME_MODES = {
     name: 'Anime HD',
     description: 'Arte anime isométrico ultra definido',
     icon: '🎌'
+  },
+  sticker: {
+    name: 'Sticker 3D',
+    description: 'Pegatinas 3D para logotipos',
+    icon: '🏷️'
   }
 } as const;
 
@@ -620,9 +633,24 @@ const App: React.FC = () => {
 
   const generateFromImage = useCallback(async (file: File, id: number, prompt?: string) => {
     // Use mode-specific prompt if none provided
-    const defaultPrompt = gameMode === 'building' ? BUILDING_IMAGE_PROMPT : 
-                         gameMode === 'anime' ? ANIME_IMAGE_PROMPT : IMAGE_PROMPT;
+    let defaultPrompt;
+    if (gameMode === 'building') {
+      defaultPrompt = BUILDING_IMAGE_PROMPT;
+    } else if (gameMode === 'anime') {
+      defaultPrompt = ANIME_IMAGE_PROMPT;
+    } else if (gameMode === 'sticker') {
+      defaultPrompt = STICKER_IMAGE_PROMPT;
+    } else {
+      defaultPrompt = IMAGE_PROMPT;
+    }
     const finalPrompt = prompt || defaultPrompt;
+    
+    // Temporary debug to verify correct prompt selection
+    console.log('🎯 STICKER MODE DEBUG:');
+    console.log('Current gameMode:', gameMode);
+    console.log('Selected prompt:', finalPrompt.substring(0, 80) + '...');
+    console.log('Is sticker mode?', gameMode === 'sticker');
+    
     const startTime = new Date();
     
     // Update the image with start time and prompt
@@ -693,8 +721,16 @@ const App: React.FC = () => {
 
   const generateFromText = useCallback(async (userInput: string, id: number) => {
     const startTime = new Date();
-    const fullPrompt = gameMode === 'building' ? BUILDING_TEXT_PROMPT_TEMPLATE(userInput) : 
-                      gameMode === 'anime' ? ANIME_TEXT_PROMPT_TEMPLATE(userInput) : TEXT_PROMPT_TEMPLATE(userInput);
+    let fullPrompt;
+    if (gameMode === 'building') {
+      fullPrompt = BUILDING_TEXT_PROMPT_TEMPLATE(userInput);
+    } else if (gameMode === 'anime') {
+      fullPrompt = ANIME_TEXT_PROMPT_TEMPLATE(userInput);
+    } else if (gameMode === 'sticker') {
+      fullPrompt = STICKER_TEXT_PROMPT_TEMPLATE(userInput);
+    } else {
+      fullPrompt = TEXT_PROMPT_TEMPLATE(userInput);
+    }
     
     // Update the image with start time and prompt
     setImages(prev => prev.map(img => 
@@ -814,6 +850,8 @@ const App: React.FC = () => {
       `Analyze these ${files.length} building/structure images and create a single isometric 2D architectural representation combining their key features. ${BUILDING_POSTFIX}` :
       gameMode === 'anime' ?
       `Analyze these ${files.length} images and create a single ultra-detailed anime isometric character combining their key elements. ${ANIME_POSTFIX}` :
+      gameMode === 'sticker' ?
+      `Analyze these ${files.length} images and create a single 3D perspective sticker design combining all visual elements. ${STICKER_POSTFIX}` :
       `Analyze these ${files.length} images and create a single 3D pixel art sprite combining their key elements. ${PROMPT_POSTFIX}`;
     
     // Update the image with start time and prompt
@@ -1861,7 +1899,8 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
                             }
                         }}
                         placeholder={gameMode === 'building' ? 'Crear edificio (ej: casa, torre, castillo)...' : 
-                                   gameMode === 'anime' ? 'Crear personaje anime (ej: ninja, mago, samurai)...' : 'Create anything ...'}
+                                   gameMode === 'anime' ? 'Crear personaje anime (ej: ninja, mago, samurai)...' :
+                                   gameMode === 'sticker' ? 'Crear pegatina 3D (ej: logo, marca, diseño)...' : 'Create anything ...'}
                         className="w-full h-12 box-border pl-4 pr-12 py-3 border border-black bg-white/80 text-black text-sm placeholder-neutral-600 focus:outline-none"
                         aria-label="Prompt input"
                     />

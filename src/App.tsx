@@ -47,8 +47,16 @@ const ANIME_IMAGE_PROMPT = ANIME_PREFIX_IMAGE + ANIME_MAIN("this character/objec
 const ANIME_TEXT_PROMPT_TEMPLATE = (input: string) => ANIME_MAIN(input) + ANIME_POSTFIX;
 const ANIME_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as ultra-detailed anime isometric art on white background. No drop shadow, high-definition anime style, isometric perspective.`;
 
+// Sticker mode constants
+const STICKER_PREFIX_IMAGE = "Convert this entire image into a high-quality 3D perspective sticker design. ";
+const STICKER_POSTFIX = "in 3D perspective style, vibrant colors, professional sticker design on transparent background. No drop shadow, clean edges, logo-ready quality, suitable for printing.";
+const STICKER_MAIN = (subject: string) => `Create a 3D perspective sticker design of ${subject} `;
+const STICKER_IMAGE_PROMPT = STICKER_PREFIX_IMAGE + STICKER_MAIN("the complete scene/image") + STICKER_POSTFIX;
+const STICKER_TEXT_PROMPT_TEMPLATE = (input: string) => STICKER_MAIN(input) + STICKER_POSTFIX;
+const STICKER_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as a 3D perspective sticker design on transparent background. No drop shadow, professional logo quality.`;
+
 // Game mode types
-type GameMode = 'pixel' | 'building' | 'anime';
+type GameMode = 'pixel' | 'building' | 'anime' | 'sticker';
 const GAME_MODES = {
   pixel: {
     name: 'Pixel Art',
@@ -64,6 +72,11 @@ const GAME_MODES = {
     name: 'Anime HD',
     description: 'Arte anime isométrico ultra definido',
     icon: '🎌'
+  },
+  sticker: {
+    name: 'Sticker 3D',
+    description: 'Pegatinas 3D para logotipos',
+    icon: '🏷️'
   }
 } as const;
 
