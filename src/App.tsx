@@ -23,7 +23,7 @@ const ensureAudioContext = async () => {
 
 
 // --- PROMPT DEFINITIONS ---
-const PROMPT_PREFIX_IMAGE = "Concisely name the key entity in this image (e.g. person, object, building). ";
+const PROMPT_PREFIX_IMAGE = "Concisely identify and name the main subject in this image (e.g. person, character, object, building, vehicle, animal, landscape, nature scene, sky, ocean, mountain, forest, or any other element). ";
 const PROMPT_POSTFIX = "in isometric perspective, 8-bit sprite on a white background. No drop shadow";
 const PROMPT_MAIN = (subject: string) => `Create 3d pixel art of ${subject} `;
 const IMAGE_PROMPT = PROMPT_PREFIX_IMAGE + PROMPT_MAIN("the isolated key entity") + PROMPT_POSTFIX;
@@ -32,7 +32,7 @@ const REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as 3d pixel 
 const REMIX_SUGGESTION_PROMPT = `Here is some 3d pixel art. Come up with 5 brief prompts for ways to remix the key entity/object. e.g. "Make it [x]" or "Add a [x]" or some other alteration of the key entity/object. Do NOT suggest ways to alter the environment or background, that must stay a plain solid empty background. Only give alterations of the key entity/object itself. Prompts should be under 8 words.`;
 
 // Building mode constants
-const BUILDING_PREFIX_IMAGE = "Convert this building/structure into an isometric 2D representation. ";
+const BUILDING_PREFIX_IMAGE = "Identify and convert this architectural element, building, structure, or construction (e.g. house, tower, bridge, monument, infrastructure, urban element) into an isometric 2D representation. ";
 const BUILDING_POSTFIX = "in isometric perspective, architectural style, clean 2D building sprite on white background. No drop shadow, no people, no vehicles.";
 const BUILDING_MAIN = (subject: string) => `Create an isometric 2D building of ${subject} `;
 const BUILDING_IMAGE_PROMPT = BUILDING_PREFIX_IMAGE + BUILDING_MAIN("this building/structure") + BUILDING_POSTFIX;
@@ -40,7 +40,7 @@ const BUILDING_TEXT_PROMPT_TEMPLATE = (input: string) => BUILDING_MAIN(input) + 
 const BUILDING_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as an isometric 2D building on white background. No drop shadow, architectural style.`;
 
 // Anime mode constants
-const ANIME_PREFIX_IMAGE = "Convert this into a high-definition anime-style isometric character. ";
+const ANIME_PREFIX_IMAGE = "Identify and convert this subject (character, person, creature, object, scene, landscape, or any element) into a high-definition anime-style isometric representation. ";
 const ANIME_POSTFIX = "in ultra-detailed anime isometric style, high resolution, vibrant colors, clean sprite on white background. No drop shadow, anime aesthetic with detailed shading, isometric perspective.";
 const ANIME_MAIN = (subject: string) => `Create a high-definition anime isometric art of ${subject} `;
 const ANIME_IMAGE_PROMPT = ANIME_PREFIX_IMAGE + ANIME_MAIN("this character/object") + ANIME_POSTFIX;

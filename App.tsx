@@ -23,7 +23,7 @@ const ensureAudioContext = async () => {
 
 
 // --- PROMPT DEFINITIONS ---
-const PROMPT_PREFIX_IMAGE = "Concisely name the key entity in this image (e.g. person, object, building). ";
+const PROMPT_PREFIX_IMAGE = "Concisely identify and name the main subject in this image (e.g. person, character, object, building, vehicle, animal, landscape, nature scene, sky, ocean, mountain, forest, or any other element). ";
 const PROMPT_POSTFIX = "in isometric perspective, 8-bit sprite on a white background. No drop shadow";
 const PROMPT_MAIN = (subject: string) => `Create 3d pixel art of ${subject} `;
 const IMAGE_PROMPT = PROMPT_PREFIX_IMAGE + PROMPT_MAIN("the isolated key entity") + PROMPT_POSTFIX;
@@ -32,7 +32,7 @@ const REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as 3d pixel 
 const REMIX_SUGGESTION_PROMPT = `Here is some 3d pixel art. Come up with 5 brief prompts for ways to remix the key entity/object. e.g. "Make it [x]" or "Add a [x]" or some other alteration of the key entity/object. Do NOT suggest ways to alter the environment or background, that must stay a plain solid empty background. Only give alterations of the key entity/object itself. Prompts should be under 8 words.`;
 
 // Building mode constants
-const BUILDING_PREFIX_IMAGE = "Convert this building/structure into an isometric 2D representation. ";
+const BUILDING_PREFIX_IMAGE = "Identify and convert this architectural element, building, structure, or construction (e.g. house, tower, bridge, monument, infrastructure, urban element) into an isometric 2D representation. ";
 const BUILDING_POSTFIX = "in isometric perspective, architectural style, clean 2D building sprite on white background. No drop shadow, no people, no vehicles.";
 const BUILDING_MAIN = (subject: string) => `Create an isometric 2D building of ${subject} `;
 const BUILDING_IMAGE_PROMPT = BUILDING_PREFIX_IMAGE + BUILDING_MAIN("this building/structure") + BUILDING_POSTFIX;
@@ -40,7 +40,7 @@ const BUILDING_TEXT_PROMPT_TEMPLATE = (input: string) => BUILDING_MAIN(input) + 
 const BUILDING_REMIX_PROMPT_TEMPLATE = (input: string) => `${input}. Keep it as an isometric 2D building on white background. No drop shadow, architectural style.`;
 
 // Anime mode constants
-const ANIME_PREFIX_IMAGE = "Convert this into a high-definition anime-style isometric character. ";
+const ANIME_PREFIX_IMAGE = "Identify and convert this subject (character, person, creature, object, scene, landscape, or any element) into a high-definition anime-style isometric representation. ";
 const ANIME_POSTFIX = "in ultra-detailed anime isometric style, high resolution, vibrant colors, clean sprite on white background. No drop shadow, anime aesthetic with detailed shading, isometric perspective.";
 const ANIME_MAIN = (subject: string) => `Create a high-definition anime isometric art of ${subject} `;
 const ANIME_IMAGE_PROMPT = ANIME_PREFIX_IMAGE + ANIME_MAIN("this character/object") + ANIME_POSTFIX;
@@ -244,6 +244,8 @@ const App: React.FC = () => {
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [showPendingArea, setShowPendingArea] = useState(false);
+  const [generationTimer, setGenerationTimer] = useState<Record<number, number>>({});
+  const [completionBadges, setCompletionBadges] = useState<Record<number, { duration: number; timestamp: number }>>({});
   const [images, setImages] = useState<ProcessedImage[]>([]);
   const [textInput, setTextInput] = useState('');
   const [remixInput, setRemixInput] = useState('');
@@ -300,6 +302,39 @@ const App: React.FC = () => {
             clearInterval(intervalId);
         }
     };
+  }, [images]);
+
+  // Timer management for generation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      
+      // Update generation timers
+      setGenerationTimer(prev => {
+        const updated = { ...prev };
+        images.forEach(img => {
+          if (img.isGenerating && img.createdAt) {
+            updated[img.id] = Math.floor((now - img.createdAt.getTime()) / 1000);
+          } else if (!img.isGenerating && updated[img.id] !== undefined) {
+            delete updated[img.id];
+          }
+        });
+        return updated;
+      });
+      
+      // Clean up old completion badges (after 3 seconds)
+      setCompletionBadges(prev => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(id => {
+          if (now - updated[parseInt(id)].timestamp > 3000) {
+            delete updated[parseInt(id)];
+          }
+        });
+        return updated;
+      });
+    }, 100);
+    
+    return () => clearInterval(interval);
   }, [images]);
 
   // Effect for cycling through remix suggestions
@@ -404,6 +439,18 @@ const App: React.FC = () => {
         }
         
         ctx.restore();
+        
+        // Show completion badge
+        const badge = completionBadges[img.id];
+        if (badge) {
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
+          ctx.fillRect(drawX + scaledWidth - 60, drawY - 25, 55, 20);
+          ctx.fillStyle = 'white';
+          ctx.font = '12px "Space Mono"';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`✓ ${badge.duration}s`, drawX + scaledWidth - 32, drawY - 15);
+        }
       }
       
       if (img.isGenerating) {
@@ -429,6 +476,32 @@ const App: React.FC = () => {
             } else {
                 drawLoaderEllipses(drawX + img.width / 2, drawY + img.height / 2);
             }
+            
+            // Show timer during generation
+             const timer = generationTimer[img.id];
+             if (timer !== undefined) {
+                 // Draw background for better visibility
+                 const timerText = `${timer}s`;
+                 ctx.font = '16px "Space Mono"';
+                 const textWidth = ctx.measureText(timerText).width;
+                 const badgeWidth = textWidth + 16;
+                 const badgeHeight = 24;
+                 const badgeX = drawX + img.width + 10;
+                 const badgeY = drawY - 5;
+                 
+                 // White background with border
+                 ctx.fillStyle = 'white';
+                 ctx.fillRect(badgeX, badgeY, badgeWidth, badgeHeight);
+                 ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                 ctx.lineWidth = 1;
+                 ctx.strokeRect(badgeX, badgeY, badgeWidth, badgeHeight);
+                 
+                 // Timer text
+                 ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                 ctx.textAlign = 'center';
+                 ctx.textBaseline = 'middle';
+                 ctx.fillText(timerText, badgeX + badgeWidth / 2, badgeY + badgeHeight / 2);
+             }
 
         } else if (img.sourcePreviewUrl && previewImageCache.current[img.id]) { // --- NEW IMAGE LOADER ---
             const previewImg = previewImageCache.current[img.id];
@@ -606,6 +679,12 @@ const App: React.FC = () => {
           scale: 1,
         }
       }));
+      
+      // Create completion badge
+      setCompletionBadges(prev => ({
+        ...prev,
+        [id]: { duration: Math.floor(duration / 1000), timestamp: Date.now() }
+      }));
     } catch (e) {
       console.error(e);
       setImages(prev => prev.filter(img => img.id !== id));
@@ -667,6 +746,12 @@ const App: React.FC = () => {
                 generationDuration: duration,
                 scale: 1,
             }
+        }));
+        
+        // Create completion badge
+        setCompletionBadges(prev => ({
+          ...prev,
+          [id]: { duration: Math.floor(duration / 1000), timestamp: Date.now() }
         }));
     } catch(e) {
         console.error(e);
@@ -783,6 +868,12 @@ const App: React.FC = () => {
           justGenerated: true,
           generatedAt: Date.now(),
         }
+      }));
+      
+      // Create completion badge
+      setCompletionBadges(prev => ({
+        ...prev,
+        [id]: { duration: Math.floor(duration / 1000), timestamp: Date.now() }
       }));
     } catch (e) {
       console.error(e);
@@ -1228,6 +1319,68 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
       link.download = 'banana-world.png';
       link.href = canvas.toDataURL('image/png');
       link.click();
+    }
+  };
+
+  const handleDownloadAllAssets = async () => {
+    const assetsToDownload = images.filter(img => img.processedImage && !img.isGenerating);
+    
+    if (assetsToDownload.length === 0) return;
+    
+    // Download each asset individually
+    for (let i = 0; i < assetsToDownload.length; i++) {
+      const img = assetsToDownload[i];
+      
+      // Create a canvas for this specific asset
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx || !img.processedImage) continue;
+      
+      const downloadScale = 3; // Same scale as individual downloads
+      canvas.width = img.processedImage.width * downloadScale;
+      canvas.height = img.processedImage.height * downloadScale;
+      
+      ctx.imageSmoothingEnabled = false;
+      
+      if (img.flippedHorizontally) {
+        ctx.save();
+        ctx.scale(-downloadScale, downloadScale);
+        ctx.drawImage(img.processedImage, -img.processedImage.width, 0);
+        ctx.restore();
+      } else {
+        ctx.drawImage(img.processedImage, 0, 0, img.processedImage.width, img.processedImage.height, 0, 0, canvas.width, canvas.height);
+      }
+      
+      // Generate filename
+      let filename = `banana-world-asset-${i + 1}`;
+      if (img.sourceText) {
+        filename = `banana-world-${img.sourceText.replace(/[^a-zA-Z0-9]/g, '-')}`;
+      } else if (img.sourceFile) {
+        const originalName = img.sourceFile.name.split('.')[0];
+        filename = `banana-world-${originalName}`;
+      }
+      
+      // Download with a small delay to avoid browser blocking
+      await new Promise(resolve => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            resolve(undefined);
+            return;
+          }
+          
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${filename}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          
+          // Small delay between downloads
+          setTimeout(resolve, 200);
+        }, 'image/png');
+      });
     }
   };
 
@@ -1734,6 +1887,22 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
 
             {/* Bottom Row (Mobile) / Right Side (Desktop) */}
             <div className="flex flex-nowrap justify-center md:justify-end gap-2 overflow-x-auto">
+                {(() => {
+                  const availableAssets = images.filter(img => img.processedImage && !img.isGenerating).length;
+                  return availableAssets > 0 ? (
+                    <button 
+                        onClick={handleDownloadAllAssets}
+                        className="h-12 box-border flex-shrink-0 px-4 py-3 border border-black bg-green-500 text-white text-sm flex items-center justify-center gap-1 transition-colors hover:bg-green-600 relative"
+                        aria-label={`Download all ${availableAssets} assets`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7,10 12,15 17,10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        All Assets
+                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                            {availableAssets}
+                        </span>
+                    </button>
+                  ) : null;
+                })()}
                 <button 
                     onClick={() => setShowResetConfirm(true)} 
                     className="h-12 box-border flex-shrink-0 px-4 py-3 border border-black bg-white/80 text-black text-sm flex items-center justify-center gap-1 transition-colors hover:bg-gray-100"
