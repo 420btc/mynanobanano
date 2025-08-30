@@ -1907,12 +1907,13 @@ const handleDownloadVideo = () => {
             accept="image/*"
             multiple
         />
-        <div className="absolute top-4 left-4 flex items-center gap-2 pointer-events-none">
-            <div className="flex items-center gap-1">
-                <span className="text-lg text-black font-bold">BANANA WORLD v0.2 By</span>
+        {/* Header para desktop */}
+        <div className="absolute top-4 left-4 md:flex hidden items-center gap-6 pointer-events-none">
+            <div className="flex items-center gap-2">
+                <span className="text-lg text-black font-bold">BANANA WORLD v0.3 By</span>
                 <button 
                     onClick={() => window.open('https://carlosfr.es/projects', '_blank')}
-                    className="text-lg text-red-600 hover:text-red-800 transition-colors cursor-pointer font-bold underline"
+                    className="pointer-events-auto px-2 py-1 text-lg text-white bg-black hover:bg-gray-800 transition-colors cursor-pointer font-bold rounded border border-gray-700 shadow-sm"
                 >
                     carlosfr.es
                 </button>
@@ -1951,7 +1952,63 @@ const handleDownloadVideo = () => {
             </div>
             <button 
                 onClick={() => setShowHelpModal(true)}
-                className="pointer-events-auto w-6 h-6 flex items-center justify-center border border-black rounded-full text-black bg-white/80"
+                className="pointer-events-auto w-6 h-6 flex items-center justify-center border border-black rounded-full text-black bg-white/80 hover:bg-white transition-colors text-sm"
+                aria-label="Show help"
+            >
+                ?
+            </button>
+        </div>
+
+        {/* Header para móvil */}
+        <div className="absolute top-4 left-4 md:hidden flex items-center gap-2 pointer-events-none">
+            <div className="flex items-center gap-1">
+                <span className="text-base text-black font-bold">BANANA WORLD v0.3 By</span>
+                <button 
+                    onClick={() => window.open('https://carlosfr.es/projects', '_blank')}
+                    className="pointer-events-auto px-2 py-1 text-sm text-white bg-black hover:bg-gray-800 transition-colors cursor-pointer font-bold rounded border border-gray-700 shadow-sm"
+                >
+                    carlosfr.es
+                </button>
+            </div>
+        </div>
+
+        {/* Controles móvil - segunda fila derecha */}
+        <div className="absolute top-16 right-4 md:hidden flex items-center gap-2 pointer-events-none">
+            <div className="relative pointer-events-auto mode-selector">
+                <button 
+                    onClick={() => setShowModeSelector(!showModeSelector)}
+                    className="flex items-center gap-2 px-3 py-2 border border-black bg-white/90 text-black text-sm font-mono hover:bg-gray-100 transition-colors rounded min-h-[44px]"
+                >
+                    <span className="text-base">{GAME_MODES[gameMode].icon}</span>
+                    <span>{GAME_MODES[gameMode].name}</span>
+                    <span className="text-xs">▼</span>
+                </button>
+                {showModeSelector && (
+                    <div className="absolute top-full right-0 mt-1 bg-white border border-black shadow-lg z-50 min-w-full">
+                        {Object.entries(GAME_MODES).map(([mode, config]) => (
+                            <button
+                                key={mode}
+                                onClick={() => {
+                                    setGameMode(mode as GameMode);
+                                    setShowModeSelector(false);
+                                }}
+                                className={`w-full px-3 py-2 text-left text-sm font-mono hover:bg-gray-100 transition-colors flex items-center gap-2 ${
+                                    gameMode === mode ? 'bg-gray-100' : ''
+                                }`}
+                            >
+                                <span>{config.icon}</span>
+                                <div>
+                                    <div className="font-bold">{config.name}</div>
+                                    <div className="text-xs text-gray-600">{config.description}</div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+            <button 
+                onClick={() => setShowHelpModal(true)}
+                className="pointer-events-auto w-10 h-10 flex items-center justify-center border border-black rounded-full text-black bg-white/80 hover:bg-white transition-colors text-base font-bold"
                 aria-label="Show help"
             >
                 ?
