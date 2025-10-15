@@ -284,8 +284,8 @@ const App: React.FC = () => {
   useEffect(() => {
     const prevImagesMap = new Map(prevImagesRef.current.map(img => [img.id, img]));
 
-    images.forEach(img => {
-        const prevImg = prevImagesMap.get(img.id);
+    images.forEach((img: ProcessedImage) => {
+        const prevImg = prevImagesMap.get(img.id) as ProcessedImage | undefined;
         if (prevImg && prevImg.isGenerating && !img.isGenerating) {
             // Image just finished generating
             (async () => {
@@ -1156,7 +1156,7 @@ const handleRemixKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPassword = (import.meta.env as any).VITE_APP_PASSWORD || 'free420';
+    const correctPassword = (import.meta.env as any).VITE_APP_PASSWORD || 'FreireFreire420';
     if (passwordInput === correctPassword) {
       setIsAuthenticated(true);
       setPasswordError(false);

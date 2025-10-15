@@ -1,7 +1,7 @@
 import { fal } from "@fal-ai/client";
 
 // Configure Fal AI with API key from environment
-if (import.meta.env.VITE_FAL_API_KEY) {
+if (import.meta.env?.VITE_FAL_API_KEY) {
   fal.config({
     credentials: import.meta.env.VITE_FAL_API_KEY
   });
@@ -245,7 +245,7 @@ export const convertImageTo3D = async (
   modelType: Model3DType = 'hunyuan-turbo',
   options: any = {}
 ): Promise<Model3DResult> => {
-  if (!import.meta.env.VITE_FAL_API_KEY) {
+  if (!import.meta.env?.VITE_FAL_API_KEY) {
     throw new Error("VITE_FAL_API_KEY environment variable not set. Please ensure it's configured in your .env.local file.");
   }
 
@@ -285,7 +285,7 @@ export const convertImageTo3D = async (
  * @returns Promise with the uploaded file URL
  */
 export const uploadFileToFal = async (file: File): Promise<string> => {
-  if (!import.meta.env.VITE_FAL_API_KEY) {
+  if (!import.meta.env?.VITE_FAL_API_KEY) {
     throw new Error("VITE_FAL_API_KEY environment variable not set. Please ensure it's configured in your .env.local file.");
   }
 
@@ -434,7 +434,7 @@ export const convertImageToVideo = async (
   modelType: VideoModelType = 'lucy',
   options: any = {}
 ): Promise<VideoResult> => {
-  if (!import.meta.env.VITE_FAL_API_KEY) {
+  if (!import.meta.env?.VITE_FAL_API_KEY) {
     throw new Error("VITE_FAL_API_KEY environment variable not set. Please ensure it's configured in your .env.local file.");
   }
 
